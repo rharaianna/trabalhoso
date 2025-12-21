@@ -1,0 +1,3 @@
+/home/rhara/trabalhoso/trabalhoso/build/CMakeFiles/trabalhoso.dir
+/home/rhara/trabalhoso/trabalhoso/build/CMakeFiles/edit_cache.dir
+/home/rhara/trabalhoso/trabalhoso/build/CMakeFiles/rebuild_cache.dir

@@ -123,6 +123,34 @@ int myFSCloseDir (int fd) {
 //ao virtual FS (vfs). Retorna um identificador unico (slot), caso
 //o sistema de arquivos tenha sido registrado com sucesso.
 //Caso contrario, retorna -1
+
 int installMyFS (void) {
-	return -1;
+    // Reservamos um espacinho na memória para FSInfo
+    FSInfo *info = (FSInfo *) malloc(sizeof(FSInfo));
+    
+    // Se não conseguirmos memória, deu erro
+    if (info == NULL) return -1;
+
+    // Dados básicos sistema
+    info->fsid = 0x00; 
+    info->fsname = "TrabalhoSO";
+
+    // "Apontamos" para as funções 
+    // SO aprende quais funções chamar quando precisar
+    info->isidleFn  = myFSIsIdle;
+    info->formatFn  = myFSFormat;
+    info->xMountFn   = myFSxMount;
+    info->openFn    = myFSOpen;
+    info->readFn    = myFSRead;
+    info->writeFn   = myFSWrite;
+    info->closeFn   = myFSClose;
+    info->opendirFn = myFSOpenDir;
+    info->readdirFn = myFSReadDir;
+    info->linkFn    = myFSLink;
+    info->unlinkFn  = myFSUnlink;
+    info->closedirFn = myFSCloseDir;
+
+    // Entregamos o formulário para o VFS 
+    // Ele vai retornar o número da "vaga" q ele deu
+    return vfsRegisterFS(info);
 }

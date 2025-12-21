@@ -1,0 +1,38 @@
+[
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/disk.c.o -c /home/rhara/trabalhoso/trabalhoso/disk.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/disk.c",
+  "output": "CMakeFiles/trabalhoso.dir/disk.c.o"
+},
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/inode.c.o -c /home/rhara/trabalhoso/trabalhoso/inode.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/inode.c",
+  "output": "CMakeFiles/trabalhoso.dir/inode.c.o"
+},
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/main.c.o -c /home/rhara/trabalhoso/trabalhoso/main.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/main.c",
+  "output": "CMakeFiles/trabalhoso.dir/main.c.o"
+},
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/myfs.c.o -c /home/rhara/trabalhoso/trabalhoso/myfs.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/myfs.c",
+  "output": "CMakeFiles/trabalhoso.dir/myfs.c.o"
+},
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/util.c.o -c /home/rhara/trabalhoso/trabalhoso/util.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/util.c",
+  "output": "CMakeFiles/trabalhoso.dir/util.c.o"
+},
+{
+  "directory": "/home/rhara/trabalhoso/trabalhoso/build",
+  "command": "/usr/bin/clang -g -std=gnu11 -o CMakeFiles/trabalhoso.dir/vfs.c.o -c /home/rhara/trabalhoso/trabalhoso/vfs.c",
+  "file": "/home/rhara/trabalhoso/trabalhoso/vfs.c",
+  "output": "CMakeFiles/trabalhoso.dir/vfs.c.o"
+}
+]
