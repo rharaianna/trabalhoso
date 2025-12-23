@@ -19,6 +19,7 @@
 //...
 //...
 
+#define MAX_INODES 256
 
 //Funcao para verificacao se o sistema de arquivos está ocioso, ou seja,
 //se nao ha quisquer descritores de arquivos em uso atualmente. Retorna
@@ -32,7 +33,28 @@ int myFSIsIdle (Disk *d) {
 //blocos disponiveis no disco, se formatado com sucesso. Caso contrario,
 //retorna -1.
 int myFSFormat (Disk *d, unsigned int blockSize) {
-	return -1;
+	unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
+	diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
+	unsigned char superbloco[DISK_SECTORDATASIZE] = {0};
+	superbloco[0]='9';		//numero magico
+	superbloco[1]='8';
+	superbloco[2]='2';
+	superbloco[3]='9';
+	unsigned char tamBloco[4] = {0}; //tam bloco
+	unsigned int blockSizeInSectors = blockSize / DISK_SECTORDATASIZE;
+	ul2char(blockSizeInSectors,tamBloco);
+	for (int i=0; i<4; i++) {
+		superbloco[4+i]=tamBloco[i];
+	}
+	unsigned int diskSizeInSectors = diskGetNumSectors(d); //tam disco
+	unsigned char diskSizeChar[4] = {0};
+	ul2char(diskSizeInSectors,diskSizeChar);
+	for (int i=0; i<4; i++) {
+		superbloco[8+i]=tamBloco[i];
+	}
+	diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
+
+	return (diskSizeInSectors/blockSizeInSectors);
 }
 
 //Funcao para montagem/desmontagem do sistema de arquivos, se possível.
