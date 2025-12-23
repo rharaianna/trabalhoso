@@ -54,6 +54,14 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	}
 	diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
 
+	//bitmap
+	//fim do bitmap
+
+	//inode
+	diskWriteSector(d,2,emptySectors);
+	Inode* i = inodeCreate(1,d);
+	inodeSave(i);
+	//fim inode
 	return (diskSizeInSectors/blockSizeInSectors);
 }
 
