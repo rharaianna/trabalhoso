@@ -55,6 +55,23 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
 
 	//bitmap
+
+    // 1 bloco 2 setores
+    unsigned char bitmap[DISK_SECTORDATASIZE] = {0};
+    // unsigned int blocosOcupados = ceil(3/blockSize);
+
+    // char byte = 1;
+    // for (int i = 1; i<blocosOcupados; i++){
+        
+    //   [0] [0] [0] [1] [1] [0] OR
+    //   [0] [0] [0] [0] [1] [0]
+
+    //     byte += pow(2,i);
+    // }
+
+    bitmap[0] = 0xC0;
+    diskWriteSector(d, 1, bitmap);
+    
 	//fim do bitmap
 
 	//inode

@@ -42,7 +42,7 @@ rule CUSTOM_COMMAND
 # Rule for re-running cmake.
 
 rule RERUN_CMAKE
-  command = /usr/bin/cmake --regenerate-during-build -S/home/rhara/trabalhoso/trabalhoso -B/home/rhara/trabalhoso/trabalhoso/build
+  command = /usr/bin/cmake --regenerate-during-build -S/home/caua/Code/trabalhoso -B/home/caua/Code/trabalhoso/build
   description = Re-running CMake...
   generator = 1
 

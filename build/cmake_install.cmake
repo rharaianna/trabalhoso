@@ -1,4 +1,4 @@
-# Install script for directory: /home/rhara/trabalhoso/trabalhoso
+# Install script for directory: /home/caua/Code/trabalhoso
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/rhara/trabalhoso/trabalhoso/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/caua/Code/trabalhoso/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
