@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "myfs.h"
+#include "disk.h"
 #include "vfs.h"
 #include "inode.h"
 #include "util.h"
@@ -18,8 +19,12 @@
 //Declaracoes globais
 //...
 //...
-
 #define MAX_INODES 256
+
+// 1 + num_sec_bitmap + ceil(MAX_INODES/8)
+#define NUM_SECTORS_HEADER 3
+
+char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
 
 //Funcao para verificacao se o sistema de arquivos está ocioso, ou seja,
 //se nao ha quisquer descritores de arquivos em uso atualmente. Retorna
@@ -88,6 +93,16 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 //de gravacao devem ser persistidos no disco. Retorna um positivo se a
 //montagem ou desmontagem foi bem sucedida ou, caso contrario, 0.
 int myFSxMount (Disk *d, int x) {
+    if(x){
+        for(int i = 0; i < NUM_SECTORS_HEADER; i++) {
+            unsigned char information_sector[DISK_SECTORDATASIZE] = {0};
+            diskReadSector(d, i, information_sector);
+            unsigned int start_sector = i*DISK_SECTORDATASIZE;
+            for(int j = 0; j < DISK_SECTORDATASIZE; j++) {
+                cache[j + start_sector] = information_sector[j];
+            }
+        }
+    }
 	return 0;
 }
 
