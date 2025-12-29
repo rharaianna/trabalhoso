@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "myfs.h"
 #include "disk.h"
 #include "vfs.h"
@@ -38,6 +39,28 @@ int myFSIsIdle (Disk *d) {
 //blocos disponiveis no disco, se formatado com sucesso. Caso contrario,
 //retorna -1.
 int myFSFormat (Disk *d, unsigned int blockSize) {
+
+	//Um monte de Dados
+		unsigned int numSectors = diskGetNumSectors(d);
+		unsigned int sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
+		
+		// Determinar quantos Inodes queremos (1 para cada 16KB de disco -> nn sei pq nn, alguem falou q era o certo)
+		// nn ta considerando os setores de conf ainda
+		unsigned int numInodes = (numSectors * DISK_SECTORDATASIZE) / (16 * 1024);
+		
+		// Bitmap: 1 bit por bloco
+		unsigned int numBlocks = numSectors / sectorsPerBlock;
+		unsigned int bitmapSectors = (numBlocks / (DISK_SECTORDATASIZE * 8)) + 1;
+		
+		// Tabela de Inodes: (numInodes * tamanho inode) / tamanho_do_setor
+		unsigned int inodeTableSectors = (numInodes * 128 / DISK_SECTORDATASIZE) + 1;
+
+		unsigned int bitmapStart = 1;
+		unsigned int inodeStart = bitmapStart + bitmapSectors;
+		unsigned int dataStart = inodeStart + inodeTableSectors;
+	
+
+	// Aqui começa dvdd
 	unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
 	diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
 	unsigned char superbloco[DISK_SECTORDATASIZE] = {0};
@@ -45,46 +68,52 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	superbloco[1]='8';
 	superbloco[2]='2';
 	superbloco[3]='9';
-	unsigned char tamBloco[4] = {0}; //tam bloco
-	unsigned int blockSizeInSectors = blockSize / DISK_SECTORDATASIZE;
-	ul2char(blockSizeInSectors,tamBloco);
+
+    //vetor temporário só o fzr os calculos para char
+    unsigned char temp[4] = {0};
+
+	ul2char(sectorsPerBlock,temp);
 	for (int i=0; i<4; i++) {
-		superbloco[4+i]=tamBloco[i];
+		superbloco[4+i]=temp[i];
 	}
+
+    //Zera Temp
+    memset(temp, 0, sizeof(temp));
+
 	unsigned int diskSizeInSectors = diskGetNumSectors(d); //tam disco
-	unsigned char diskSizeChar[4] = {0};
-	ul2char(diskSizeInSectors,diskSizeChar);
+	ul2char(diskSizeInSectors,temp);
 	for (int i=0; i<4; i++) {
-		superbloco[8+i]=tamBloco[i];
+		superbloco[8+i]=temp[i];
 	}
 	diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
 
-	//bitmap
 
-    // 1 bloco 2 setores
-    unsigned char bitmap[DISK_SECTORDATASIZE] = {0};
-    // unsigned int blocosOcupados = ceil(3/blockSize);
 
-    // char byte = 1;
-    // for (int i = 1; i<blocosOcupados; i++){
-        
-    //   [0] [0] [0] [1] [1] [0] OR
-    //   [0] [0] [0] [0] [1] [0]
+    // Zerar Bitmap
+    for(unsigned int i=0; i < bitmapSectors; i++) 
+        diskWriteSector(d, bitmapStart + i, emptySectors);
 
-    //     byte += pow(2,i);
-    // }
+    // Zerar Tabela de Inodes
+    for(unsigned int i=0; i < inodeTableSectors; i++)
+    diskWriteSector(d, inodeStart + i, emptySectors);
 
-    bitmap[0] = 0xC0;
-    diskWriteSector(d, 1, bitmap);
-    
+    //Falta a logica de como vai ver qq ta ocupado ou nn e colocar no bitmap
+
+    //Fim Dessa lógica
+
+
 	//fim do bitmap
 
 	//inode
+
 	diskWriteSector(d,2,emptySectors);
 	Inode* i = inodeCreate(1,d);
 	inodeSave(i);
 	//fim inode
-	return (diskSizeInSectors/blockSizeInSectors);
+	
+    
+
+    return numBlocks;
 }
 
 //Funcao para montagem/desmontagem do sistema de arquivos, se possível.
