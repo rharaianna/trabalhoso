@@ -97,13 +97,23 @@ int myFSxMount (Disk *d, int x) {
         for(int i = 0; i < NUM_SECTORS_HEADER; i++) {
             unsigned char information_sector[DISK_SECTORDATASIZE] = {0};
             diskReadSector(d, i, information_sector);
+			//verificacao do superbloco
+        	if (i == 0) {
+		        for (int j=0; j<4; j++) {
+			        unsigned char numMagico[4] = {'9','8','2','9'};
+			        if (information_sector[j]!=numMagico[j]) {
+						return 0;
+					}
+        		}
+        	}
+        	//escreve na memoria caso seja valido
             unsigned int start_sector = i*DISK_SECTORDATASIZE;
             for(int j = 0; j < DISK_SECTORDATASIZE; j++) {
                 cache[j + start_sector] = information_sector[j];
             }
         }
     }
-	return 0;
+	return 1;
 }
 
 //Funcao para abertura de um arquivo, a partir do caminho especificado
