@@ -30,7 +30,7 @@ char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
 //se nao ha quisquer descritores de arquivos em uso atualmente. Retorna
 //um positivo se ocioso ou, caso contrario, 0.
 int myFSIsIdle (Disk *d) {
-	return 0;
+	return 1; //valor pra teste da desmontagem antes de montar a funcao de ocioso
 }
 
 //Funcao para formatacao de um disco com o novo sistema de arquivos
@@ -93,7 +93,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 //de gravacao devem ser persistidos no disco. Retorna um positivo se a
 //montagem ou desmontagem foi bem sucedida ou, caso contrario, 0.
 int myFSxMount (Disk *d, int x) {
-    if(x){
+    if(x==1){
         for(int i = 0; i < NUM_SECTORS_HEADER; i++) {
             unsigned char information_sector[DISK_SECTORDATASIZE] = {0};
             diskReadSector(d, i, information_sector);
@@ -112,8 +112,15 @@ int myFSxMount (Disk *d, int x) {
                 cache[j + start_sector] = information_sector[j];
             }
         }
+    	return 1;
     }
-	return 1;
+	if (x==0) {
+		for (int i=0; i < (NUM_SECTORS_HEADER*DISK_SECTORDATASIZE); i++) {
+			cache[i] = 0x0;
+		}
+		return 1;
+	}
+	return 0;
 }
 
 //Funcao para abertura de um arquivo, a partir do caminho especificado
