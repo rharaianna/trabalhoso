@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "myfs.h"
 #include "disk.h"
 #include "vfs.h"
@@ -218,11 +219,6 @@ int installMyFS (void) {
     info->readFn    = myFSRead;
     info->writeFn   = myFSWrite;
     info->closeFn   = myFSClose;
-    info->opendirFn = myFSOpenDir;
-    info->readdirFn = myFSReadDir;
-    info->linkFn    = myFSLink;
-    info->unlinkFn  = myFSUnlink;
-    info->closedirFn = myFSCloseDir;
 
     // Entregamos o formulário para o VFS 
     // Ele vai retornar o número da "vaga" q ele deu
