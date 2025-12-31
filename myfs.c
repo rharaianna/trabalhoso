@@ -27,7 +27,53 @@
 #define NUM_SECTORS_HEADER 3
 
 char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
+int sectorsPerBlock;
 int filesOpened = -1; // -1 indica sistema nao montado
+
+//Funcao que recebe um setor como parametro e retorna se ele esta vazio
+//Retorna 0 caso nao esteja vazio, positivo caso vazio
+//POR ENQUANTO ESTOU VERIFICANDO SE E TUDO ZERO MAS TEM QUE CONFERIR
+//POIS A FORMATACAO PODE CAUSAR COM QUE SEJA DIFERNETE E PRECISA
+//SEGUIR A LOGICA CONSISTENTEMENTE
+int isSectorEmpty (const char sector[DISK_SECTORDATASIZE]) {
+	for (int i=0; i < DISK_SECTORDATASIZE; i++) {
+		if (sector[i]!=0) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+//Funcao para atualizar bitmap, se baseando num intervalo de dois setores
+//Ambos definidos por parametro
+void updateBlocksBitmap(Disk *d, int startSector, int endSector) {
+	unsigned char bitmap[DISK_SECTORDATASIZE];
+	diskReadSector(d, 1, bitmap);
+	unsigned int startBlock = startSector / sectorsPerBlock;
+	unsigned int endBlock = endSector / sectorsPerBlock;
+	for (int i=startBlock; i< endBlock; i++) {
+		unsigned char bitmapItem = bitmap[i];
+		unsigned char bitsFromItem[8];
+		//converte em binario
+		 for (int j = 0; j < 8; j++) {
+			 bitsFromItem[7-j]= bitmapItem - (2^(7-j));
+		 }
+		//atualiza cada bit
+		unsigned char temp2[DISK_SECTORDATASIZE];
+		for (int j=0; j<8; j++) {
+			diskReadSector(d, ((i*sectorsPerBlock)+j), temp2);
+			if (!isSectorEmpty(temp2)){bitsFromItem[j]=1;}
+			else{bitsFromItem[j]=0;}
+		}
+		//reconverte e salva no bitmap
+		bitmapItem = 0;
+		for (int j=7; j>=0; j--) {
+			bitmapItem += bitsFromItem[j] * (2 ^ j);
+		}
+		bitmap[i] = bitmapItem;
+	}
+	diskWriteSector(d, 1, bitmap);
+}
 
 //Funcao para verificacao se o sistema de arquivos está ocioso, ou seja,
 //se nao ha quisquer descritores de arquivos em uso atualmente. Retorna
@@ -46,7 +92,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 	//Um monte de Dados
 		unsigned int numSectors = diskGetNumSectors(d);
-		unsigned int sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
+		sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
 		
 		// Determinar quantos Inodes queremos (1 para cada 16KB de disco -> nn sei pq nn, alguem falou q era o certo)
 		// nn ta considerando os setores de conf ainda
