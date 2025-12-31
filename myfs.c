@@ -26,12 +26,15 @@
 #define NUM_SECTORS_HEADER 3
 
 char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
+int filesOpened = -1; // -1 indica sistema nao montado
 
 //Funcao para verificacao se o sistema de arquivos está ocioso, ou seja,
 //se nao ha quisquer descritores de arquivos em uso atualmente. Retorna
 //um positivo se ocioso ou, caso contrario, 0.
 int myFSIsIdle (Disk *d) {
-	return 1; //valor pra teste da desmontagem antes de montar a funcao de ocioso
+	if (filesOpened > 0)
+		return 0;
+	return 1;
 }
 
 //Funcao para formatacao de um disco com o novo sistema de arquivos
@@ -141,12 +144,14 @@ int myFSxMount (Disk *d, int x) {
                 cache[j + start_sector] = information_sector[j];
             }
         }
+    	filesOpened=0;
     	return 1;
     }
 	if (x==0) {
 		for (int i=0; i < (NUM_SECTORS_HEADER*DISK_SECTORDATASIZE); i++) {
 			cache[i] = 0x0;
 		}
+		filesOpened=-1;
 		return 1;
 	}
 	return 0;
@@ -157,6 +162,7 @@ int myFSxMount (Disk *d, int x) {
 //criando o arquivo se nao existir. Retorna um descritor de arquivo,
 //em caso de sucesso. Retorna -1, caso contrario.
 int myFSOpen (Disk *d, const char *path) {
+	//filesOpened ++, nao podeultrapassar MAX_FDS
 	return -1;
 }
 	
@@ -183,47 +189,7 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 //Funcao para fechar um arquivo, a partir de um descritor de arquivo
 //existente. Retorna 0 caso bem sucedido, ou -1 caso contrario
 int myFSClose (int fd) {
-	return -1;
-}
-
-//Funcao para abertura de um diretorio, a partir do caminho
-//especificado em path, no disco indicado por d, no modo Read/Write,
-//criando o diretorio se nao existir. Retorna um descritor de arquivo,
-//em caso de sucesso. Retorna -1, caso contrario.
-int myFSOpenDir (Disk *d, const char *path) {
-	return -1;
-}
-
-//Funcao para a leitura de um diretorio, identificado por um descritor
-//de arquivo existente. Os dados lidos correspondem a uma entrada de
-//diretorio na posicao atual do cursor no diretorio. O nome da entrada
-//e' copiado para filename, como uma string terminada em \0 (max 255+1).
-//O numero do inode correspondente 'a entrada e' copiado para inumber.
-//Retorna 1 se uma entrada foi lida, 0 se fim de diretorio ou -1 caso
-//mal sucedido
-int myFSReadDir (int fd, char *filename, unsigned int *inumber) {
-	return -1;
-}
-
-//Funcao para adicionar uma entrada a um diretorio, identificado por um
-//descritor de arquivo existente. A nova entrada tera' o nome indicado
-//por filename e apontara' para o numero de i-node indicado por inumber.
-//Retorna 0 caso bem sucedido, ou -1 caso contrario.
-int myFSLink (int fd, const char *filename, unsigned int inumber) {
-	return -1;
-}
-
-//Funcao para remover uma entrada existente em um diretorio, 
-//identificado por um descritor de arquivo existente. A entrada e'
-//identificada pelo nome indicado em filename. Retorna 0 caso bem
-//sucedido, ou -1 caso contrario.
-int myFSUnlink (int fd, const char *filename) {
-	return -1;
-}
-
-//Funcao para fechar um diretorio, identificado por um descritor de
-//arquivo existente. Retorna 0 caso bem sucedido, ou -1 caso contrario.	
-int myFSCloseDir (int fd) {
+	//filesOpened -- (nao fazer menos que zero)
 	return -1;
 }
 
