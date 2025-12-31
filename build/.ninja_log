@@ -1,8 +1,0 @@
-# ninja log v5
-4	117	1766875623427463996	CMakeFiles/trabalhoso.dir/util.c.o	e3267980aede42b5
-3	122	1766875623431376988	CMakeFiles/trabalhoso.dir/myfs.c.o	98e2a9905ca547e5
-1	122	1766875623431376988	CMakeFiles/trabalhoso.dir/disk.c.o	d178cd492337d36c
-4	139	1766875623450941948	CMakeFiles/trabalhoso.dir/vfs.c.o	fa730f1ad94918b3
-1	140	1766875623450941948	CMakeFiles/trabalhoso.dir/inode.c.o	4d8f3a59a380d91
-3	192	1766875623501810843	CMakeFiles/trabalhoso.dir/main.c.o	e433ee72833a971f
-192	317	1766875623627026585	trabalhoso	f95a14429b0bd7a9
