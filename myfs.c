@@ -226,9 +226,9 @@ int myFSOpen (Disk *d, const char *path) {
 	Inode* NumFixoInode = inodeLoad(1, d);
 	unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
 	int leitura = diskReadSector(d, inodeGetBlockAddr(NumFixoInode, 0), cacheSetor);
-	/*if (leitura == -1){// testar
+	if (leitura == -1){// testar
 		return -1;
-	}*/
+	}
 
 	//busca num do inode
 	unsigned char temp[DISK_SECTORDATASIZE] ={0};
@@ -248,6 +248,8 @@ int myFSOpen (Disk *d, const char *path) {
 					tabelaAbertos[j].posicao = 0;
 					tabelaAbertos[j].emUso = 1;
 
+					printf("DEBUG: Tentei abrir o arquivo %s\n", path);
+
 					filesOpened++;
 					free(NumFixoInode);
 
@@ -257,6 +259,16 @@ int myFSOpen (Disk *d, const char *path) {
 		}
 	}
 	free(NumFixoInode);
+
+	//nao achou, cria arquivo
+	int initialBlock = ceil(fs_MetaDataSizeInSectors/numBlock);
+
+	for (int i=initialBlock; i<bitMapSizeInBytes; i++){
+		if(isBlockFree(bitmap[i])){
+			//cria arquivo
+			return arquivoCriado;
+		}
+	}
 	return -1;
 }
 	
