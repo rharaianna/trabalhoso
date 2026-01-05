@@ -33,7 +33,7 @@ int filesOpened = -1; // -1 indica sistema nao montado
 typedef struct { 
 	Inode *inode;
 	unsigned int posicao;
-	unsigned int uso;
+	unsigned int emUso;
 } DescritorArquivo;
 
 DescritorArquivo tabelaAbertos[MAX_FDS]; //guarda as informações do arquivo enquanto ele estiver aberto
@@ -229,6 +229,7 @@ int myFSOpen (Disk *d, const char *path) {
 	/*if (leitura == -1){// testar
 		return -1;
 	}*/
+	
 	//busca num do inode
 	unsigned char temp[DISK_SECTORDATASIZE] ={0};
 	for (int i=0; i < DISK_SECTORDATASIZE; i+=32){
@@ -236,8 +237,18 @@ int myFSOpen (Disk *d, const char *path) {
 		if (strcmp(temp, path+1) == 0){ //o +1 p ignorar a barra do arquivo
 			int numInodeEncontrado;
 			char2ul(&cacheSetor[i+28], &numInodeEncontrado);
+
 			//carregando pra memoria
 			Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
+			//registrando na tabela de de arquivos abertos
+			for (int j=0; j < MAX_FDS; j++){
+				if (tabelaAbertos[j].emUso == 0){
+					tabelaAbertos[j].inode = arquivoInode;
+					tabelaAbertos[j].posicao = 0;
+					tabelaAbertos[j].emUso = 1;
+					return j;
+				}
+			}
 		}
 	}
 	return -1;
