@@ -212,29 +212,54 @@ int myFSxMount (Disk *d, int x) {
         for(int i = 0; i < fsMetadataSizeInSectors; i++) {
             unsigned char information_sector[DISK_SECTORDATASIZE] = {0};
             diskReadSector(d, i, information_sector);
-			//verificacao do superbloco
-        	if (i == 0) {
-		        for (int j=0; j<4; j++) {
-			        unsigned char numMagico[4] = MYFS_MAGIC_NUMBER;
-			        if (information_sector[j]!=numMagico[j]) {
-						return 0;
+			switch (i) {
+				case 0:
+					//verificacao do superbloco
+					if (i == 0) {
+						for (int j=0; j<4; j++) {
+							unsigned char numMagico[4] = MYFS_MAGIC_NUMBER;
+							if (information_sector[j]!=numMagico[j]) {
+								return 0;
+							}
+						}
 					}
-        		}
-        	}
-        	//escreve na memoria caso seja valido
-            unsigned int start_sector = i*DISK_SECTORDATASIZE;
-            // for(int j = 0; j < DISK_SECTORDATASIZE; j++) {
-            //     cache[j + start_sector] = information_sector[j];
-            // }
+					//escreve na memoria caso seja valido
+					memcpy(superblockCache, information_sector, DISK_SECTORDATASIZE);
+					break;
+				case 1:
+					bitmapCache = (unsigned char *) malloc(bitmapSectors * DISK_SECTORDATASIZE);
+					memcpy(bitmapCache, information_sector, DISK_SECTORDATASIZE);
+					break;
+				case 2:
+					//verificar se existe indoe raiz aqui
+					rootInodeCache = (unsigned char *) malloc(16);
+					memcpy(rootInodeCache, information_sector, 16);
+					break;
+				default:
+					break;
+			}
         }
     	filesOpened=0;
+		fsMounted=1;
+		currentDisk=d;
     	return 1;
     }
 	if (x==0) {
-		// for (int i=0; i < (fsMetadataSizeInSectors*DISK_SECTORDATASIZE); i++) {
-		// 	cache[i] = 0x0;
-		// }
+		diskWriteSector(d, 0, superblockCache);
+		free(superblockCache);
+		for (int i=bitmapStart; i < (bitmapSectors); i++) {
+			unsigned char setorBitmap[DISK_SECTORDATASIZE] = {0};
+			memcpy(setorBitmap, &bitmapCache[(i - bitmapStart) * DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
+			diskWriteSector(d, i, setorBitmap);
+		}
+		for (int i=inodeStart; i < (inodeTableSectors); i++) {
+			unsigned char setorInode[DISK_SECTORDATASIZE] = {0};
+			memcpy(setorInode, &rootInodeCache[(i - inodeStart) * DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
+			diskWriteSector(d, i, setorInode);
+		}
 		filesOpened=-1;
+		currentDisk=NULL;
+		fsMounted=0;
 		return 1;
 	}
 	return 0;
