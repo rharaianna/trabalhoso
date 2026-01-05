@@ -221,7 +221,25 @@ int myFSOpen (Disk *d, const char *path) {
 	if (filesOpened >= MAX_FDS){
 		return -1;
 	}
-	
+
+	//busca do arquivo
+	Inode* NumFixoInode = inodeLoad(1, d);
+	unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
+	int leitura = diskReadSector(d, inodeGetBlockAddr(NumFixoInode, 0), cacheSetor);
+	/*if (leitura == -1){// testar
+		return -1;
+	}*/
+	//busca num do inode
+	unsigned char temp[DISK_SECTORDATASIZE] ={0};
+	for (int i=0; i < DISK_SECTORDATASIZE; i+=32){
+		strncpy((char*)temp, (char*)&cacheSetor[i], 28);
+		if (strcmp(temp, path+1) == 0){ //o +1 p ignorar a barra do arquivo
+			int numInodeEncontrado;
+			char2ul(&cacheSetor[i+28], &numInodeEncontrado);
+			//carregando pra memoria
+			Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
+		}
+	}
 	return -1;
 }
 	
