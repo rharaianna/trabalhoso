@@ -1,7 +1,7 @@
 /*
 *  myfs.c - Implementacao do sistema de arquivos MyFS
 *
-*  Autores: SUPER_PROGRAMADORES_C
+*  Autores: Cauã Moreno, Estevão, Rhara Ianna, Yan 
 *  Projeto: Trabalho Pratico II - Sistemas Operacionais
 *  Organizacao: Universidade Federal de Juiz de Fora
 *  Departamento: Dep. Ciencia da Computacao
@@ -175,11 +175,16 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 
     // INICIALIZAÇÃO DO BITMAP
-		for(unsigned int i=0; i < bitmapSectors; i++) 
+		for(unsigned int i=0; i < bitmapSectors; i++) {
 			diskWriteSector(d, bitmapStart + i, emptySectors);
+        }
 
-		
+        int unsigned startBlock = bitmapStart;
+        int unsigned endBlock = bitmapStart + (bitmapSectors/blockSize + 1);
+		allocateBlocksInBitmap(bitmapCache, bitmapStart, endBlock);
 
+        
+        diskWriteSector(d, bitmapStart, bitmapCache);
 
 	//marca os setores de metadata como ocupados
 	// FIM DO BITMAP
