@@ -229,11 +229,12 @@ int myFSOpen (Disk *d, const char *path) {
 	/*if (leitura == -1){// testar
 		return -1;
 	}*/
-	
+
 	//busca num do inode
 	unsigned char temp[DISK_SECTORDATASIZE] ={0};
 	for (int i=0; i < DISK_SECTORDATASIZE; i+=32){
 		strncpy((char*)temp, (char*)&cacheSetor[i], 28);
+		temp[28] = '\0'; // essa biblioteca fudida de cima nao adiciona o fim da string se chegar ate 28
 		if (strcmp(temp, path+1) == 0){ //o +1 p ignorar a barra do arquivo
 			int numInodeEncontrado;
 			char2ul(&cacheSetor[i+28], &numInodeEncontrado);
@@ -246,11 +247,16 @@ int myFSOpen (Disk *d, const char *path) {
 					tabelaAbertos[j].inode = arquivoInode;
 					tabelaAbertos[j].posicao = 0;
 					tabelaAbertos[j].emUso = 1;
+
+					filesOpened++;
+					free(NumFixoInode);
+
 					return j;
 				}
 			}
 		}
 	}
+	free(NumFixoInode);
 	return -1;
 }
 	
@@ -278,6 +284,7 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 //existente. Retorna 0 caso bem sucedido, ou -1 caso contrario
 int myFSClose (int fd) {
 	//filesOpened -- (nao fazer menos que zero)
+	//dar free no Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
 	return -1;
 }
 
