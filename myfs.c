@@ -30,6 +30,14 @@ char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
 int sectorsPerBlock;
 int filesOpened = -1; // -1 indica sistema nao montado
 
+typedef struct { 
+	Inode *inode;
+	unsigned int posicao;
+	unsigned int uso;
+} DescritorArquivo;
+
+DescritorArquivo tabelaAbertos[MAX_FDS]; //guarda as informações do arquivo enquanto ele estiver aberto
+
 //Funcao que recebe um setor como parametro e retorna se ele esta vazio
 //Retorna 0 caso nao esteja vazio, positivo caso vazio
 //POR ENQUANTO ESTOU VERIFICANDO SE E TUDO ZERO MAS TEM QUE CONFERIR
@@ -210,6 +218,10 @@ int myFSxMount (Disk *d, int x) {
 //em caso de sucesso. Retorna -1, caso contrario.
 int myFSOpen (Disk *d, const char *path) {
 	//filesOpened ++, nao podeultrapassar MAX_FDS
+	if (filesOpened >= MAX_FDS){
+		return -1;
+	}
+	
 	return -1;
 }
 	
