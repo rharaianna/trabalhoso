@@ -21,14 +21,34 @@
 //Declaracoes globais
 //...
 //...
-#define MAX_INODES 256
+#define MYFS_ID 0x00
+#define MYFS_NAME "TrabalhoSO"
+#define MYFS_MAGIC_NUMBER "CRRY"
 
-// 1 + num_sec_bitmap + ceil(MAX_INODES/8)
-#define NUM_SECTORS_HEADER 3
 
-char cache[NUM_SECTORS_HEADER*DISK_SECTORDATASIZE];
-int sectorsPerBlock;
+// Ponteiros iniciam como NULL, índices como -1, flags como 0
+int fsMounted = 0;        // 0 = desmontado, 1 = montado
+Disk *currentDisk = NULL;   // disco atualmente montado
+
+unsigned int sectorsPerBlock = 0;
+unsigned int numSectors = 0;
+unsigned int numBlocks = 0;
+
+unsigned int bitmapStart = -1;        // setor inicial do bitmap
+unsigned int bitmapSectors = 0;      // quantos setores o bitmap ocupa
+unsigned int bitmapSizeInBytes = 0; // tamanho do bitmap em bits
+
+unsigned int numInodes = 0;          // numero total de inodes
+unsigned int inodeStart = -1;         // setor inicial da tabela de inodes
+unsigned int inodeTableSectors;  // tamanho da tabela de inodes
+
+unsigned int dataStart = -1;          // setor inicial dos dados
+unsigned char *bitmapCache = NULL;
+unsigned char *rootInodeCache = NULL;
+unsigned char *superblockCache = NULL;
 int filesOpened = -1; // -1 indica sistema nao montado
+
+unsigned int fsMetadataSizeInSectors = 0;
 
 typedef struct { 
 	Inode *inode;
@@ -37,6 +57,17 @@ typedef struct {
 } DescritorArquivo;
 
 DescritorArquivo tabelaAbertos[MAX_FDS]; //guarda as informações do arquivo enquanto ele estiver aberto
+//...
+
+//Conversao de Sector para Block
+unsigned int sectorToBlock(unsigned int sector) {
+    return sector / sectorsPerBlock;
+}
+
+//Conversao de Block para Sector
+unsigned int blockToSector(unsigned int block, unsigned int offset) {
+    return block * sectorsPerBlock + offset;
+}
 
 //Funcao que recebe um setor como parametro e retorna se ele esta vazio
 //Retorna 0 caso nao esteja vazio, positivo caso vazio
@@ -52,35 +83,34 @@ int isSectorEmpty (const char sector[DISK_SECTORDATASIZE]) {
 	return 1;
 }
 
-//Funcao para atualizar bitmap, se baseando num intervalo de dois setores
-//Ambos definidos por parametro
-void updateBlocksBitmap(Disk *d, int startSector, int endSector) {
-	unsigned char bitmap[DISK_SECTORDATASIZE];
-	diskReadSector(d, 1, bitmap);
-	unsigned int startBlock = startSector / sectorsPerBlock;
-	unsigned int endBlock = endSector / sectorsPerBlock;
-	for (int i=startBlock; i< endBlock; i++) {
-		unsigned char bitmapItem = bitmap[i];
-		unsigned char bitsFromItem[8];
-		//converte em binario
-		 for (int j = 0; j < 8; j++) {
-			 bitsFromItem[7-j]= bitmapItem - (2^(7-j));
-		 }
-		//atualiza cada bit
-		unsigned char temp2[DISK_SECTORDATASIZE];
-		for (int j=0; j<8; j++) {
-			diskReadSector(d, ((i*sectorsPerBlock)+j), temp2);
-			if (!isSectorEmpty(temp2)){bitsFromItem[j]=1;}
-			else{bitsFromItem[j]=0;}
+//Funcao para verificar se um setor esta livre no bitmap
+//Retorna positivo se livre, 0 se ocupado
+int isBlockFree(unsigned char *bitmap, int block)
+{
+	int byteIndex = block / 8;
+	int bitIndex  = block % 8;
+	return (bitmap[byteIndex] & (1 << (7 - bitIndex))) == 0;
+}
+
+//Funcao para alocar blocos no bitmap, se baseando num intervalo de dois blocos
+//Ambos definidos por parametro. Retorna 0 se alocacao bem sucedida ou
+int allocateBlocksInBitmap(unsigned char *bitmap, int startBlock,int endBlock)
+{
+	//Verificação
+	for (int s = startBlock; s <= endBlock; s++) {
+		if (!isBlockFree(bitmap, s)) {
+			return -1; // setor ocupado
 		}
-		//reconverte e salva no bitmap
-		bitmapItem = 0;
-		for (int j=7; j>=0; j--) {
-			bitmapItem += bitsFromItem[j] * (2 ^ j);
-		}
-		bitmap[i] = bitmapItem;
 	}
-	diskWriteSector(d, 1, bitmap);
+
+	//Marcação
+	for (int s = startBlock; s <= endBlock; s++) {
+		int byteIndex = s / 8;
+		int bitIndex  = s % 8;
+		bitmap[byteIndex] |= (1 << (7 - bitIndex));
+	}
+
+	return 0;
 }
 
 //Funcao para verificacao se o sistema de arquivos está ocioso, ou seja,
@@ -99,35 +129,32 @@ int myFSIsIdle (Disk *d) {
 int myFSFormat (Disk *d, unsigned int blockSize) {
 
 	//Um monte de Dados
-		unsigned int numSectors = diskGetNumSectors(d);
+		numSectors = diskGetNumSectors(d);
 		sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
 		
 		// Determinar quantos Inodes queremos (1 para cada 16KB de disco -> nn sei pq nn, alguem falou q era o certo)
 		// nn ta considerando os setores de conf ainda
-		unsigned int numInodes = (numSectors * DISK_SECTORDATASIZE) / (16 * 1024);
+		numInodes = (numSectors * DISK_SECTORDATASIZE) / (16 * 1024);
 		
 		// Bitmap: 1 bit por bloco
-		unsigned int numBlocks = numSectors / sectorsPerBlock;
-		unsigned int bitmapSectors = (numBlocks / (DISK_SECTORDATASIZE * 8)) + 1;
+		numBlocks = numSectors / sectorsPerBlock;
+		bitmapSectors = (numBlocks / (DISK_SECTORDATASIZE * 8)) + 1;
 		
 		// Tabela de Inodes: (numInodes * tamanho inode) / tamanho_do_setor
-		unsigned int inodeTableSectors = (numInodes * 128 / DISK_SECTORDATASIZE) + 1;
+		inodeTableSectors = (numInodes * 128 / DISK_SECTORDATASIZE) + 1;
 
-		unsigned int bitmapStart = 1;
-		unsigned int inodeStart = bitmapStart + bitmapSectors;
-		unsigned int dataStart = inodeStart + inodeTableSectors;
+		bitmapStart = 1;
+		inodeStart = bitmapStart + bitmapSectors;
+		dataStart = inodeStart + inodeTableSectors;
 	
 
 	// Aqui começa dvdd
 	unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
 	diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
 	unsigned char superbloco[DISK_SECTORDATASIZE] = {0};
-	superbloco[0]='9';		//numero magico
-	superbloco[1]='8';
-	superbloco[2]='2';
-	superbloco[3]='9';
+	memcpy(superbloco, MYFS_MAGIC_NUMBER, 4);
 
-    //vetor temporário só o fzr os calculos para char
+    //vetor temporário só p fzr os calculos para char
     unsigned char temp[4] = {0};
 
 	ul2char(sectorsPerBlock,temp);
@@ -147,27 +174,28 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 
 
-    // Zerar Bitmap
-    for(unsigned int i=0; i < bitmapSectors; i++) 
-        diskWriteSector(d, bitmapStart + i, emptySectors);
+    // INICIALIZAÇÃO DO BITMAP
+		for(unsigned int i=0; i < bitmapSectors; i++) 
+			diskWriteSector(d, bitmapStart + i, emptySectors);
 
-    // Zerar Tabela de Inodes
-    for(unsigned int i=0; i < inodeTableSectors; i++)
-    diskWriteSector(d, inodeStart + i, emptySectors);
-
-    //Falta a logica de como vai ver qq ta ocupado ou nn e colocar no bitmap
-
-    //Fim Dessa lógica
+		
 
 
-	//fim do bitmap
+	//marca os setores de metadata como ocupados
+	// FIM DO BITMAP
+
+
+    // INICIALIZAÇÃO DA TABELA DE INODES
+		for(unsigned int i=0; i < inodeTableSectors; i++)
+			diskWriteSector(d, inodeStart + i, emptySectors);
+
 
 	//inode
 
 	diskWriteSector(d,2,emptySectors);
 	Inode* i = inodeCreate(1,d);
 	inodeSave(i);
-	//fim inode
+	// FIM DA TABELA DE INODES
 	
     
 
@@ -181,13 +209,13 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 //montagem ou desmontagem foi bem sucedida ou, caso contrario, 0.
 int myFSxMount (Disk *d, int x) {
     if(x==1){
-        for(int i = 0; i < NUM_SECTORS_HEADER; i++) {
+        for(int i = 0; i < fsMetadataSizeInSectors; i++) {
             unsigned char information_sector[DISK_SECTORDATASIZE] = {0};
             diskReadSector(d, i, information_sector);
 			//verificacao do superbloco
         	if (i == 0) {
 		        for (int j=0; j<4; j++) {
-			        unsigned char numMagico[4] = {'9','8','2','9'};
+			        unsigned char numMagico[4] = MYFS_MAGIC_NUMBER;
 			        if (information_sector[j]!=numMagico[j]) {
 						return 0;
 					}
@@ -195,17 +223,17 @@ int myFSxMount (Disk *d, int x) {
         	}
         	//escreve na memoria caso seja valido
             unsigned int start_sector = i*DISK_SECTORDATASIZE;
-            for(int j = 0; j < DISK_SECTORDATASIZE; j++) {
-                cache[j + start_sector] = information_sector[j];
-            }
+            // for(int j = 0; j < DISK_SECTORDATASIZE; j++) {
+            //     cache[j + start_sector] = information_sector[j];
+            // }
         }
     	filesOpened=0;
     	return 1;
     }
 	if (x==0) {
-		for (int i=0; i < (NUM_SECTORS_HEADER*DISK_SECTORDATASIZE); i++) {
-			cache[i] = 0x0;
-		}
+		// for (int i=0; i < (fsMetadataSizeInSectors*DISK_SECTORDATASIZE); i++) {
+		// 	cache[i] = 0x0;
+		// }
 		filesOpened=-1;
 		return 1;
 	}
@@ -306,8 +334,12 @@ int myFSClose (int fd) {
 //Caso contrario, retorna -1
 
 int installMyFS (void) {
-    // Reservamos um espacinho na memória para FSInfo
-    FSInfo *info = (FSInfo *) malloc(sizeof(FSInfo));
+	if (superblockCache == NULL) {
+		superblockCache = (unsigned char *) malloc(DISK_SECTORDATASIZE);
+	}
+
+	// Reservamos um espacinho na memória para FSInfo
+	FSInfo *info = (FSInfo *) malloc(sizeof(FSInfo));
     
     // Se não conseguirmos memória, deu erro
     if (info == NULL) return -1;
