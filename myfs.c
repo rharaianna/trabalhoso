@@ -185,11 +185,10 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 		unsigned int totalBitsNeeded = numBlocks;
 		unsigned int totalBytesNeeded = (totalBitsNeeded + 7) / 8;
 
-		
 
 		// Tabela de Inodes: (numInodes * tamanho_do_inode) / tamanho_setor
 		// Usando 128 bytes por inode como base
-		unsigned int inodeSize = 128; 
+		unsigned int inodeSize = 64; 
 		inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
 		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
 
