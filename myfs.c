@@ -8,6 +8,7 @@
 *
 */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,8 +36,9 @@ unsigned int numSectors = 0;
 unsigned int numBlocks = 0;
 
 unsigned int bitmapStart = -1;        // setor inicial do bitmap
-unsigned int bitmapSectors = 0;      // quantos setores o bitmap ocupa
+unsigned int bitmapTableSectors = 0;      // quantos setores o bitmap ocupa
 unsigned int bitmapSizeInBytes = 0; // tamanho do bitmap em bits
+
 
 unsigned int numInodes = 0;          // numero total de inodes
 unsigned int inodeStart = -1;         // setor inicial da tabela de inodes
@@ -130,6 +132,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 	//Um monte de Dados
 		numSectors = diskGetNumSectors(d);
+
 		sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
 		
 		// Determinar quantos Inodes queremos (1 para cada 16KB de disco -> nn sei pq nn, alguem falou q era o certo)
@@ -138,13 +141,14 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 		
 		// Bitmap: 1 bit por bloco
 		numBlocks = numSectors / sectorsPerBlock;
-		bitmapSectors = (numBlocks / (DISK_SECTORDATASIZE * 8)) + 1;
+		unsigned int bitsPerSector = DISK_SECTORDATASIZE * 8;
+		bitmapTableSectors = (numBlocks + bitsPerSector - 1) / bitsPerSector;
 		
 		// Tabela de Inodes: (numInodes * tamanho inode) / tamanho_do_setor
 		inodeTableSectors = (numInodes * 128 / DISK_SECTORDATASIZE) + 1;
 
 		bitmapStart = 1;
-		inodeStart = bitmapStart + bitmapSectors;
+		inodeStart = bitmapStart + bitmapTableSectors;
 		dataStart = inodeStart + inodeTableSectors;
 	
 
@@ -175,22 +179,47 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 
     // INICIALIZAÇÃO DO BITMAP
-		for(unsigned int i=0; i < bitmapSectors; i++) {
-			diskWriteSector(d, bitmapStart + i, emptySectors);
-        }
 
-        int unsigned startBlock = bitmapStart;
-        int unsigned endBlock = bitmapStart + (bitmapSectors/blockSize + 1);
-		allocateBlocksInBitmap(bitmapCache, bitmapStart, endBlock);
 
+		// 1 bit por bloco. Calculamos quantos setores o bitmap ocupa.
+		unsigned int totalBitsNeeded = numBlocks;
+		unsigned int totalBytesNeeded = (totalBitsNeeded + 7) / 8;
+
+		
+
+		// Tabela de Inodes: (numInodes * tamanho_do_inode) / tamanho_setor
+		// Usando 128 bytes por inode como base
+		unsigned int inodeSize = 128; 
+		inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
+		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
+
+
+		dataStart = 1 + bitmapTableSectors + inodeTableSectors; //Setor que começa data
+		unsigned int totalBlocksToReserve = (dataStart + sectorsPerBlock - 1) / sectorsPerBlock;
+
+		//O cache deve ser múltiplo de DISK_SECTORDATASIZE para o diskWriteSector não quebrar
+		unsigned int bitmapCacheSize = bitmapTableSectors * DISK_SECTORDATASIZE;
+		bitmapCache = (unsigned char *) calloc(1, bitmapCacheSize);
+
+		if (bitmapCache == NULL) return -1;
+
+		// Marcamos os blocos de metadados como ocupados (1)
+		allocateBlocksInBitmap(bitmapCache, 0, totalBlocksToReserve - 1);
+
+		// Escrita do Bitmap no Disco
+		for (unsigned int i = 0; i < bitmapTableSectors; i++) {
+			diskWriteSector(d, bitmapStart + i, &bitmapCache[i * DISK_SECTORDATASIZE]);
+		}
         
-        diskWriteSector(d, bitmapStart, bitmapCache);
 
-	//marca os setores de metadata como ocupados
 	// FIM DO BITMAP
 
 
     // INICIALIZAÇÃO DA TABELA DE INODES
+
+		//tabela de inodes  = numero de inodes x tamanho de inode (64 bytes)
+		inodeTableSectors = (numInodes * 64);
+
 		for(unsigned int i=0; i < inodeTableSectors; i++)
 			diskWriteSector(d, inodeStart + i, emptySectors);
 
