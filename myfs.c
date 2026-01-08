@@ -39,7 +39,7 @@ unsigned int bitmapStart = -1;        // setor inicial do bitmap
 unsigned int bitmapTableSectors = 0;      // quantos setores o bitmap ocupa
 unsigned int bitmapSizeInBytes = 0; // tamanho do bitmap em bits
 
-
+unsigned int inodeSize = 64; 
 unsigned int numInodes = 0;          // numero total de inodes
 unsigned int inodeStart = -1;         // setor inicial da tabela de inodes
 unsigned int inodeTableSectors;  // tamanho da tabela de inodes
@@ -136,64 +136,51 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 		sectorsPerBlock = blockSize / DISK_SECTORDATASIZE;
 		
 		// Determinar quantos Inodes queremos (1 para cada 16KB de disco -> nn sei pq nn, alguem falou q era o certo)
-		// nn ta considerando os setores de conf ainda
 		numInodes = (numSectors * DISK_SECTORDATASIZE) / (16 * 1024);
+		inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
 		
 		// Bitmap: 1 bit por bloco
 		numBlocks = numSectors / sectorsPerBlock;
 		unsigned int bitsPerSector = DISK_SECTORDATASIZE * 8;
-		bitmapTableSectors = (numBlocks + bitsPerSector - 1) / bitsPerSector;
+		unsigned int totalBytesNeeded = (numBlocks + 7) / 8;
+		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
 		
-		// Tabela de Inodes: (numInodes * tamanho inode) / tamanho_do_setor
-		inodeTableSectors = (numInodes * 128 / DISK_SECTORDATASIZE) + 1;
+
+
+		
+		
+		// Aqui começa dvdd
+		unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
+		diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
+		unsigned char superbloco[DISK_SECTORDATASIZE] = {0};
+		memcpy(superbloco, MYFS_MAGIC_NUMBER, 4);
+		
+		//vetor temporário só p fzr os calculos para char
+		unsigned char temp[4] = {0};
+		
+		ul2char(sectorsPerBlock,temp);
+		for (int i=0; i<4; i++) {
+			superbloco[4+i]=temp[i];
+		}
+		
+		//Zera Temp
+		memset(temp, 0, sizeof(temp));
+		
+		unsigned int diskSizeInSectors = diskGetNumSectors(d); //tam disco
+		ul2char(diskSizeInSectors,temp);
+		for (int i=0; i<4; i++) {
+			superbloco[8+i]=temp[i];
+		}
+		diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
+		
+		
+		
+	// INICIALIZAÇÃO DO BITMAP
 
 		bitmapStart = 1;
 		inodeStart = bitmapStart + bitmapTableSectors;
 		dataStart = inodeStart + inodeTableSectors;
-	
 
-	// Aqui começa dvdd
-	unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
-	diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
-	unsigned char superbloco[DISK_SECTORDATASIZE] = {0};
-	memcpy(superbloco, MYFS_MAGIC_NUMBER, 4);
-
-    //vetor temporário só p fzr os calculos para char
-    unsigned char temp[4] = {0};
-
-	ul2char(sectorsPerBlock,temp);
-	for (int i=0; i<4; i++) {
-		superbloco[4+i]=temp[i];
-	}
-
-    //Zera Temp
-    memset(temp, 0, sizeof(temp));
-
-	unsigned int diskSizeInSectors = diskGetNumSectors(d); //tam disco
-	ul2char(diskSizeInSectors,temp);
-	for (int i=0; i<4; i++) {
-		superbloco[8+i]=temp[i];
-	}
-	diskWriteSector(d, 0, superbloco); //finaliza superbloco escrevendo
-
-
-
-    // INICIALIZAÇÃO DO BITMAP
-
-
-		// 1 bit por bloco. Calculamos quantos setores o bitmap ocupa.
-		unsigned int totalBitsNeeded = numBlocks;
-		unsigned int totalBytesNeeded = (totalBitsNeeded + 7) / 8;
-
-
-		// Tabela de Inodes: (numInodes * tamanho_do_inode) / tamanho_setor
-		// Usando 128 bytes por inode como base
-		unsigned int inodeSize = 64; 
-		inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
-		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
-
-
-		dataStart = 1 + bitmapTableSectors + inodeTableSectors; //Setor que começa data
 		unsigned int totalBlocksToReserve = (dataStart + sectorsPerBlock - 1) / sectorsPerBlock;
 
 		//O cache deve ser múltiplo de DISK_SECTORDATASIZE para o diskWriteSector não quebrar
@@ -202,7 +189,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 		if (bitmapCache == NULL) return -1;
 
-		// Marcamos os blocos de metadados como ocupados (1)
+		// Marcamos os blocos de metadados como ocupados
 		allocateBlocksInBitmap(bitmapCache, 0, totalBlocksToReserve - 1);
 
 		// Escrita do Bitmap no Disco
@@ -210,7 +197,6 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 			diskWriteSector(d, bitmapStart + i, &bitmapCache[i * DISK_SECTORDATASIZE]);
 		}
         
-
 	// FIM DO BITMAP
 
 
