@@ -44,6 +44,7 @@ unsigned int inodeSize = 64;
 unsigned int numInodes = 0;          // numero total de inodes
 unsigned int inodeStart = -1;         // setor inicial da tabela de inodes
 unsigned int inodeTableSectors;  // tamanho da tabela de inodes
+unsigned int numLastInode = 0;       // ultimo inode alocado
 
 unsigned int dataStart = -1;          // setor inicial dos dados
 unsigned char *bitmapCache = NULL;
@@ -220,6 +221,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	diskWriteSector(d,2,emptySectors);
 	Inode* i = inodeCreate(1,d);
 	inodeSave(i);
+	numLastInode = 1;
 	// FIM DA TABELA DE INODES
 	
     
@@ -329,7 +331,7 @@ int myFSOpen (Disk *d, const char *path) {
 			Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
 			
 			// Registrando na tabela de de arquivos abertos
-			for (int j=0; j < MAX_FDS; j++){
+			for (int j=1; j <= MAX_FDS; j++){
 				if (tabelaAbertos[j].emUso == 0){
 					tabelaAbertos[j].inode = arquivoInode;
 					tabelaAbertos[j].posicaoCursor = 0;
@@ -359,7 +361,8 @@ int myFSOpen (Disk *d, const char *path) {
 	}
 	
 	// Cria o Inode
-	unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
+	// unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
+	unsigned int inodeNumber = ++numLastInode;
 
 	Inode* novoInode = inodeCreate(inodeNumber, d);
 	
@@ -368,7 +371,7 @@ int myFSOpen (Disk *d, const char *path) {
 		return -1; // Erro na criação do Inode
 	}
 	inodeSave(novoInode);
-
+	
 	// Atualiza o Diretório Raiz
 	entradaRaiz[vagaNoDiretorio].inode = inodeNumber;
 	strncpy(entradaRaiz[vagaNoDiretorio].name, path+1, FILE_NAME_MAX_LENGTH);
@@ -376,20 +379,20 @@ int myFSOpen (Disk *d, const char *path) {
 	
 	// Salva o diretório no disco
 	diskWriteSector(d, sectorRoot, cacheSetor);
-
+	
 	// Abre o arquivo (Coloca na tabela)
-	for (int k=0; k < MAX_FDS; k++){
+	for (int k=1; k <= MAX_FDS; k++){
 		if (tabelaAbertos[k].emUso == 0){
 			tabelaAbertos[k].inode = novoInode;
 			tabelaAbertos[k].posicaoCursor = 0;
 			tabelaAbertos[k].emUso = 1;
-
+			
 			filesOpened++;
 			free(rootInode);
 			return k;
 		}
 	}
-
+	
 	free(rootInode);
 	free(novoInode);
 	return -1;
