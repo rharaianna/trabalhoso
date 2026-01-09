@@ -252,7 +252,7 @@ int myFSxMount (Disk *d, int x) {
 					memcpy(superblockCache, information_sector, DISK_SECTORDATASIZE);
 					break;
 				case 1:
-					bitmapCache = (unsigned char *) malloc(bitmapSectors * DISK_SECTORDATASIZE);
+					bitmapCache = (unsigned char *) malloc(bitmapSizeInBytes);
 					memcpy(bitmapCache, information_sector, DISK_SECTORDATASIZE);
 					break;
 				case 2:
@@ -272,7 +272,7 @@ int myFSxMount (Disk *d, int x) {
 	if (x==0) {
 		diskWriteSector(d, 0, superblockCache);
 		free(superblockCache);
-		for (int i=bitmapStart; i < (bitmapSectors); i++) {
+		for (int i=bitmapStart; i < (bitmapTableSectors); i++) {
 			unsigned char setorBitmap[DISK_SECTORDATASIZE] = {0};
 			memcpy(setorBitmap, &bitmapCache[(i - bitmapStart) * DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
 			diskWriteSector(d, i, setorBitmap);
