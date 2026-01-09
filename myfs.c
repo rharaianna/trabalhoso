@@ -24,6 +24,7 @@
 #define MYFS_ID 0x00
 #define MYFS_NAME "TrabalhoSO"
 #define MYFS_MAGIC_NUMBER "CRRY"
+#define FILE_NAME_MAX_LENGTH 28
 
 
 // Ponteiros iniciam como NULL, índices como -1, flags como 0
@@ -50,9 +51,14 @@ int filesOpened = -1; // -1 indica sistema nao montado
 
 unsigned int fsMetadataSizeInSectors = 0;
 
+typedef struct {
+	char name[FILE_NAME_MAX_LENGTH];
+	unsigned int inode;
+} RootEntry;
+
 typedef struct { 
 	Inode *inode;
-	unsigned int posicao;
+	unsigned int posicaoCursor;
 	unsigned int emUso;
 } DescritorArquivo;
 
@@ -275,40 +281,103 @@ int myFSxMount (Disk *d, int x) {
 //criando o arquivo se nao existir. Retorna um descritor de arquivo,
 //em caso de sucesso. Retorna -1, caso contrario.
 int myFSOpen (Disk *d, const char *path) {
-	//filesOpened ++, nao podeultrapassar MAX_FDS
-	if (filesOpened >= MAX_FDS){
+	// Verifica se o maximo de arquivos abertos foi atingido
+	if (filesOpened >= MAX_FDS) return -1;
+
+	// Carrega arquivos a partir do rootInode
+	Inode* rootInode = inodeLoad(1, d);
+	unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
+
+	unsigned int blockRoot = inodeGetBlockAddr(rootInode, 0);
+	unsigned int sectorRoot = blockToSector(blockRoot, 0);
+
+	int leitura = diskReadSector(d, sectorRoot, cacheSetor);
+	if (leitura == -1) {
+		free(rootInode);
 		return -1;
 	}
 
-	//busca do arquivo
-	Inode* NumFixoInode = inodeLoad(1, d);
-	unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
-	int leitura = diskReadSector(d, inodeGetBlockAddr(NumFixoInode, 0), cacheSetor);
-	/*if (leitura == -1){// testar
-		return -1;
-	}*/
-	
-	//busca num do inode
-	unsigned char temp[DISK_SECTORDATASIZE] ={0};
-	for (int i=0; i < DISK_SECTORDATASIZE; i+=32){
-		strncpy((char*)temp, (char*)&cacheSetor[i], 28);
-		if (strcmp(temp, path+1) == 0){ //o +1 p ignorar a barra do arquivo
-			int numInodeEncontrado;
-			char2ul(&cacheSetor[i+28], &numInodeEncontrado);
+	RootEntry*entradaRaiz = (RootEntry*) cacheSetor;
+	int qtdEntradas = DISK_SECTORDATASIZE / sizeof(RootEntry);
 
-			//carregando pra memoria
+	// Procura o arquivo pelo nome
+	for (int i=0; i < qtdEntradas; i++){
+		char nomeTemp[FILE_NAME_MAX_LENGTH+1]; // FILE_NAME_MAX_LENGTH chars + '\0'
+		strncpy(nomeTemp, entradaRaiz[i].name, FILE_NAME_MAX_LENGTH);
+		nomeTemp[FILE_NAME_MAX_LENGTH] = '\0';
+
+		if (strcmp(nomeTemp, path+1) == 0){ 
+			int numInodeEncontrado;
+			// Usando a estrutura para acessar o campo inode
+			numInodeEncontrado = entradaRaiz[i].inode;
+
+			// Carregando pra memoria
 			Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
-			//registrando na tabela de de arquivos abertos
+			
+			// Registrando na tabela de de arquivos abertos
 			for (int j=0; j < MAX_FDS; j++){
 				if (tabelaAbertos[j].emUso == 0){
 					tabelaAbertos[j].inode = arquivoInode;
-					tabelaAbertos[j].posicao = 0;
+					tabelaAbertos[j].posicaoCursor = 0;
 					tabelaAbertos[j].emUso = 1;
+
+					filesOpened++;
+					free(rootInode);
 					return j;
 				}
 			}
 		}
 	}
+
+	// Cria arquivo se não encontrar (Apenas Inode e Diretório, sem bloco de dados inicial)
+	// Procura por uma entrada vazia no diretório
+	int vagaNoDiretorio = -1;
+	for (int j=0; j < qtdEntradas; j++){
+		if (entradaRaiz[j].name[0] == '\0') {
+			vagaNoDiretorio = j;
+			break;
+		}
+	}
+
+	if (vagaNoDiretorio == -1) {
+		free(rootInode);
+		return -1; // Diretório cheio
+	}
+	
+	// Cria o Inode
+	unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
+
+	Inode* novoInode = inodeCreate(inodeNumber, d);
+	
+	if (novoInode == NULL) {
+		free(rootInode);
+		return -1; // Erro na criação do Inode
+	}
+	inodeSave(novoInode);
+
+	// Atualiza o Diretório Raiz
+	entradaRaiz[vagaNoDiretorio].inode = inodeNumber;
+	strncpy(entradaRaiz[vagaNoDiretorio].name, path+1, FILE_NAME_MAX_LENGTH);
+	entradaRaiz[vagaNoDiretorio].name[FILE_NAME_MAX_LENGTH - 1] = '\0';
+	
+	// Salva o diretório no disco
+	diskWriteSector(d, sectorRoot, cacheSetor);
+
+	// Abre o arquivo (Coloca na tabela)
+	for (int k=0; k < MAX_FDS; k++){
+		if (tabelaAbertos[k].emUso == 0){
+			tabelaAbertos[k].inode = novoInode;
+			tabelaAbertos[k].posicaoCursor = 0;
+			tabelaAbertos[k].emUso = 1;
+
+			filesOpened++;
+			free(rootInode);
+			return k;
+		}
+	}
+
+	free(rootInode);
+	free(novoInode);
 	return -1;
 }
 	
@@ -336,6 +405,7 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 //existente. Retorna 0 caso bem sucedido, ou -1 caso contrario
 int myFSClose (int fd) {
 	//filesOpened -- (nao fazer menos que zero)
+	//dar free no Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
 	return -1;
 }
 
