@@ -209,8 +209,8 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
     // INICIALIZAÇÃO DA TABELA DE INODES
 
-		//tabela de inodes  = numero de inodes x tamanho de inode (64 bytes)
-		inodeTableSectors = (numInodes * 64);
+		//tabela de inodes  = numero de inodes x tamanho de inode -> tem q ser multiplo de setor pra passar dps pro disco
+		inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
 
 		for(unsigned int i=0; i < inodeTableSectors; i++)
 			diskWriteSector(d, inodeStart + i, emptySectors);
@@ -219,9 +219,21 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	//inode
 
 	diskWriteSector(d,2,emptySectors);
-	Inode* i = inodeCreate(1,d);
-	inodeSave(i);
-	numLastInode = 1;
+	Inode* root = inodeCreate(1,d);
+	if (root) {
+        inodeSave(root);
+        free(root);
+    }
+
+	// Cria todos os outros Inodes (ID 2 até numInodes) como livres
+    for (unsigned int i = 2; i <= numInodes; i++) {
+        Inode* temp = inodeCreate(i, d);
+        if (temp) {
+            inodeSave(temp); // Grava o ID correto e a estrutura zerada no disco
+            free(temp);// Se não der free, o malloc vai estourar a memória
+        }
+    }
+
 	// FIM DA TABELA DE INODES
 	
     
