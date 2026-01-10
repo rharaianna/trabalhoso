@@ -218,7 +218,6 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 	//inode
 
-	diskWriteSector(d,2,emptySectors);
 	Inode* root = inodeCreate(1,d);
 	if (root) {
         inodeSave(root);
