@@ -44,7 +44,6 @@ unsigned int inodeSize = 64;
 unsigned int numInodes = 0;          // numero total de inodes
 unsigned int inodeStart = -1;         // setor inicial da tabela de inodes
 unsigned int inodeTableSectors;  // tamanho da tabela de inodes
-unsigned int numLastInode = 0;       // ultimo inode alocado
 
 unsigned int dataStart = -1;          // setor inicial dos dados
 unsigned char *bitmapCache = NULL;
@@ -373,7 +372,7 @@ int myFSOpen (Disk *d, const char *path) {
 	
 	// Cria o Inode
 	// unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
-	unsigned int inodeNumber = ++numLastInode;
+	unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
 
 	Inode* novoInode = inodeCreate(inodeNumber, d);
 	
