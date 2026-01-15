@@ -64,7 +64,8 @@ typedef struct {
 	unsigned int emUso;
 } DescritorArquivo;
 
-DescritorArquivo tabelaAbertos[MAX_FDS]; //guarda as informações do arquivo enquanto ele estiver aberto
+DescritorArquivo tabelaAbertos[MAX_FDS] = {0}; //guarda as informações do arquivo enquanto ele estiver aberto
+
 //...
 
 //Conversao de Sector para Block
@@ -342,10 +343,10 @@ int myFSOpen (Disk *d, const char *path) {
 			
 			// Registrando na tabela de de arquivos abertos
 			for (int j=1; j <= MAX_FDS; j++){
-				if (tabelaAbertos[j].emUso == 0){
-					tabelaAbertos[j].inode = arquivoInode;
-					tabelaAbertos[j].posicaoCursor = 0;
-					tabelaAbertos[j].emUso = 1;
+				if (tabelaAbertos[j-1].emUso == 0){
+					tabelaAbertos[j-1].inode = arquivoInode;
+					tabelaAbertos[j-1].posicaoCursor = 0;
+					tabelaAbertos[j-1].emUso = 1;
 
 					filesOpened++;
 					free(rootInode);
@@ -371,7 +372,6 @@ int myFSOpen (Disk *d, const char *path) {
 	}
 	
 	// Cria o Inode
-	// unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
 	unsigned int inodeNumber = inodeFindFreeInode(inodeStart, d);
 
 	Inode* novoInode = inodeCreate(inodeNumber, d);
@@ -392,13 +392,19 @@ int myFSOpen (Disk *d, const char *path) {
 	
 	// Abre o arquivo (Coloca na tabela)
 	for (int k=1; k <= MAX_FDS; k++){
-		if (tabelaAbertos[k].emUso == 0){
-			tabelaAbertos[k].inode = novoInode;
-			tabelaAbertos[k].posicaoCursor = 0;
-			tabelaAbertos[k].emUso = 1;
+		if (tabelaAbertos[k-1].emUso == 0){
+			tabelaAbertos[k-1].inode = novoInode;
+			tabelaAbertos[k-1].posicaoCursor = 0;
+			tabelaAbertos[k-1].emUso = 1;
 			
 			filesOpened++;
 			free(rootInode);
+
+			for (int m = 0; m < MAX_FDS; m++) {
+				printf("Entrada %d: Uso=%d, Inode=%p, Cursor=%d \n", m+1, tabelaAbertos[m].emUso, tabelaAbertos[m].inode, tabelaAbertos[m].posicaoCursor);
+			}
+			printf("filesOpened: %d", filesOpened);
+
 			return k;
 		}
 	}
@@ -431,8 +437,26 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 //Funcao para fechar um arquivo, a partir de um descritor de arquivo
 //existente. Retorna 0 caso bem sucedido, ou -1 caso contrario
 int myFSClose (int fd) {
-	//filesOpened -- (nao fazer menos que zero)
-	//dar free no Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
+
+	if(filesOpened <= 0 || fd < 1 || fd > MAX_FDS){
+		return -1;
+	}
+	
+	printf("filesOpened: %d", filesOpened);
+	if (tabelaAbertos[fd-1].emUso == 1){
+		tabelaAbertos[fd-1].inode = NULL;
+		tabelaAbertos[fd-1].posicaoCursor = 0;
+		tabelaAbertos[fd-1].emUso = 0;
+		
+		filesOpened--;
+		for (int m = 0; m < MAX_FDS; m++) {
+				printf("Entrada %d: Uso=%d, Inode=%p, Cursor=%d \n", m+1, tabelaAbertos[m].emUso, tabelaAbertos[m].inode, tabelaAbertos[m].posicaoCursor);
+		}
+		printf("filesOpened: %d", filesOpened);
+		return 0;
+	}
+
+	
 	return -1;
 }
 
