@@ -1,7 +1,7 @@
 /*
 *  myfs.c - Implementacao do sistema de arquivos MyFS
 *
-*  Autores: Cauã Moreno, Estevão, Rhara Ianna, Yan 
+*  Autores: Cauã Moreno, Estêvão Barbosa Fiorilo da Rocha, Rhara Ianna, Yan
 *  Projeto: Trabalho Pratico II - Sistemas Operacionais
 *  Organizacao: Universidade Federal de Juiz de Fora
 *  Departamento: Dep. Ciencia da Computacao
@@ -92,7 +92,7 @@ int isSectorEmpty (const char sector[DISK_SECTORDATASIZE]) {
 	return 1;
 }
 
-//Funcao para verificar se um setor esta livre no bitmap
+//Funcao para verificar se um bloco esta livre no bitmap
 //Retorna positivo se livre, 0 se ocupado
 int isBlockFree(unsigned char *bitmap, int block)
 {
@@ -424,6 +424,25 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 	return -1;
 }
 
+//Funcao que acha um bloco livre, cria o bloco no inode e retorna o primeiro setor desse bloco
+//Retorna -1 se falso
+int createInodeBlock(Inode* inode)
+{
+	int blockAddr = -1;
+	for (int i = 0; i < bitmapSizeInBytes;i++)
+	{
+		if (isBlockFree(bitmapCache, i)) {
+			blockAddr=i;
+			break;
+		}
+	}
+	if (blockAddr == -1) return -1;
+	inodeAddBlock(inode, blockAddr);
+	allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
+	int sectorAtual = blockToSector(blockAddr, 0);
+	return sectorAtual;
+}
+
 //Funcao para a escrita de um arquivo, a partir de um descritor de arquivo
 //existente. Os dados de buf sao copiados para o disco a partir da posição
 //atual do cursor e terao tamanho maximo de nbytes. Ao fim, o cursor deve
@@ -431,7 +450,49 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 //proximo byte apos o ultimo escrito. Retorna o numero de bytes
 //efetivamente escritos em caso de sucesso ou -1, caso contrario
 int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
-	return -1;
+	if (fd < 0 || fd >= MAX_FDS || tabelaAbertos[fd].emUso == 0) return -1;
+
+	DescritorArquivo* arquivo = &tabelaAbertos[fd];
+	Inode* iNodeAtual = arquivo->inode;
+	int bytesEscritos = 0;
+	for (int i = 0; i < nbytes; i++)
+	{
+		printf("%c", buf[i]);
+	}
+
+	while (bytesEscritos < nbytes) {
+		int blockIdx = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
+		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
+
+		int sectorToWrite;
+
+		if (offsetNoBloco == 0 && inodeGetBlockAddr(iNodeAtual, blockIdx) == -1) {
+			sectorToWrite = createInodeBlock(iNodeAtual);
+			if (sectorToWrite == -1) break; // Disco cheio
+		} else {
+			int blockAddr = inodeGetBlockAddr(iNodeAtual, blockIdx);
+			sectorToWrite = blockToSector(blockAddr, sectorNoBloco);
+		}
+
+		unsigned char infoToWrite[DISK_SECTORDATASIZE];
+		diskReadSector(currentDisk, sectorToWrite, infoToWrite);
+
+		while (offsetNoSetor < DISK_SECTORDATASIZE && bytesEscritos < nbytes) {
+			infoToWrite[offsetNoSetor] = buf[bytesEscritos];
+			offsetNoSetor++;
+			bytesEscritos++;
+			arquivo->posicaoCursor++;
+		}
+
+		diskWriteSector(currentDisk, sectorToWrite, infoToWrite);
+	}
+
+	// Salva o Inode atualizado no disco (metadados como tamanho e blocos novos)
+	inodeSave(iNodeAtual);
+
+	return bytesEscritos;
 }
 
 //Funcao para fechar um arquivo, a partir de um descritor de arquivo
