@@ -456,8 +456,7 @@ char* intParaBinario(int n) {
 //Retorna -1 se falso
 int createInodeBlock(Inode* inode)
 {
-	printf("%d AAAAAAAAAAAAA",bitmapSizeInBytes);
-	for (int i = 5; i < bitmapSizeInBytes; i++)
+	for (int i = 1; i < bitmapSizeInBytes; i++)
 	{
 		for (int j = 0; j < 8; j++)
 		{
