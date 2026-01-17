@@ -151,6 +151,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 		unsigned int bitsPerSector = DISK_SECTORDATASIZE * 8;
 		unsigned int totalBytesNeeded = (numBlocks + 7) / 8;
 		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
+		bitmapSizeInBytes = bitmapTableSectors * DISK_SECTORDATASIZE;
 		
 
 
@@ -455,7 +456,7 @@ char* intParaBinario(int n) {
 //Retorna -1 se falso
 int createInodeBlock(Inode* inode)
 {
-	printf("%d",bitmapSizeInBytes);
+	printf("%d AAAAAAAAAAAAA",bitmapSizeInBytes);
 	for (int i = 5; i < bitmapSizeInBytes; i++)
 	{
 		for (int j = 0; j < 8; j++)
