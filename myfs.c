@@ -424,23 +424,56 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 	return -1;
 }
 
-//Funcao que acha um bloco livre, cria o bloco no inode e retorna o primeiro setor desse bloco
+char* intParaBinario(int n) {
+	char *bin = malloc(9 * sizeof(char)); // 9 bits + '\0'
+	if (bin == NULL) return NULL;
+
+	int i = 0;
+
+	if (n == 0) {
+		bin[i++] = '0';
+	} else {
+		while (n > 0) {
+			bin[i++] = (n % 2) + '0';
+			n /= 2;
+		}
+	}
+
+	bin[i] = '\0';
+
+	// inverte
+	for (int j = 0; j < i / 2; j++) {
+		char tmp = bin[j];
+		bin[j] = bin[i - j - 1];
+		bin[i - j - 1] = tmp;
+	}
+
+	return bin;
+}
+
+//Funcao que acha um bloco livre, cria o bloco no inode e retorna o endereco desse bloco
 //Retorna -1 se falso
 int createInodeBlock(Inode* inode)
 {
-	int blockAddr = -1;
-	for (int i = 0; i < bitmapSizeInBytes;i++)
+	printf("%d",bitmapSizeInBytes);
+	for (int i = 5; i < bitmapSizeInBytes; i++)
 	{
-		if (isBlockFree(bitmapCache, i)) {
-			blockAddr=i;
-			break;
+		for (int j = 0; j < 8; j++)
+		{
+			if ((bitmapCache[i] & (1 << j)) == 0)
+			{
+
+				int blockAddr = (i * 8) + j;
+				if (blockAddr == 0){continue;}
+				printf("%d",blockAddr);
+				allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
+				inodeAddBlock(inode, blockAddr);
+
+				return blockAddr;
+			}
 		}
 	}
-	if (blockAddr == -1) return -1;
-	inodeAddBlock(inode, blockAddr);
-	allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
-	int sectorAtual = blockToSector(blockAddr, 0);
-	return sectorAtual;
+	return -1;
 }
 
 //Funcao para a escrita de um arquivo, a partir de um descritor de arquivo
@@ -455,24 +488,23 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 	DescritorArquivo* arquivo = &tabelaAbertos[fd];
 	Inode* iNodeAtual = arquivo->inode;
 	int bytesEscritos = 0;
-	for (int i = 0; i < nbytes; i++)
-	{
-		printf("%c", buf[i]);
-	}
 
 	while (bytesEscritos < nbytes) {
-		int blockIdx = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int logicalBlock = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
 		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock);
 		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
 		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
 
-		int sectorToWrite;
+		int blockAddr = inodeGetBlockAddr(iNodeAtual, logicalBlock);
 
-		if (offsetNoBloco == 0 && inodeGetBlockAddr(iNodeAtual, blockIdx) == -1) {
-			sectorToWrite = createInodeBlock(iNodeAtual);
-			if (sectorToWrite == -1) break; // Disco cheio
-		} else {
-			int blockAddr = inodeGetBlockAddr(iNodeAtual, blockIdx);
+		int sectorToWrite;
+		if (blockAddr == 0) {
+			blockAddr = createInodeBlock(iNodeAtual);
+			if (blockAddr == -1) return -1;
+			sectorToWrite = blockToSector(blockAddr, sectorNoBloco);
+		}
+		else
+		{
 			sectorToWrite = blockToSector(blockAddr, sectorNoBloco);
 		}
 
@@ -483,15 +515,15 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 			infoToWrite[offsetNoSetor] = buf[bytesEscritos];
 			offsetNoSetor++;
 			bytesEscritos++;
-			arquivo->posicaoCursor++;
+			arquivo->posicaoCursor++;;
 		}
 
 		diskWriteSector(currentDisk, sectorToWrite, infoToWrite);
+		allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
 	}
 
 	// Salva o Inode atualizado no disco (metadados como tamanho e blocos novos)
 	inodeSave(iNodeAtual);
-
 	return bytesEscritos;
 }
 
