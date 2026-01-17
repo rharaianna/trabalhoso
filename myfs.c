@@ -110,6 +110,7 @@ int allocateBlocksInBitmap(unsigned char *bitmap, int startBlock,int endBlock)
 		if (!isBlockFree(bitmap, s)) {
 			return -1; // setor ocupado
 		}
+
 	}
 
 	//Marcação
@@ -397,15 +398,8 @@ int myFSOpen (Disk *d, const char *path) {
 			tabelaAbertos[k-1].inode = novoInode;
 			tabelaAbertos[k-1].posicaoCursor = 0;
 			tabelaAbertos[k-1].emUso = 1;
-			
 			filesOpened++;
 			free(rootInode);
-
-			for (int m = 0; m < MAX_FDS; m++) {
-				printf("Entrada %d: Uso=%d, Inode=%p, Cursor=%d \n", m+1, tabelaAbertos[m].emUso, tabelaAbertos[m].inode, tabelaAbertos[m].posicaoCursor);
-			}
-			printf("filesOpened: %d", filesOpened);
-
 			return k;
 		}
 	}
@@ -460,13 +454,12 @@ int createInodeBlock(Inode* inode)
 	{
 		for (int j = 0; j < 8; j++)
 		{
-			if ((bitmapCache[i] & (1 << j)) == 0)
+			if ((bitmapCache[i] & (1 << (7 - j))) == 0)
 			{
 
-				int blockAddr = (i * 8) + j;
+				int blockAddr = (i * 8) + j; //calcula endereco
 				if (blockAddr == 0){continue;}
-				printf("%d",blockAddr);
-				allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
+				allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr); //aloca (IMPORTANTE PRA NAO PRESCREVER, format permite prescrever por transformar em 0)
 				inodeAddBlock(inode, blockAddr);
 
 				return blockAddr;
@@ -491,14 +484,14 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 
 	while (bytesEscritos < nbytes) {
 		int logicalBlock = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
-		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
 		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
 		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
 
 		int blockAddr = inodeGetBlockAddr(iNodeAtual, logicalBlock);
 
 		int sectorToWrite;
-		if (blockAddr == 0) {
+		if (blockAddr == 0) { //se nao encontrar o bloco logico como valido no inode, cria um bloco no inode e define o primeiro setor do bloco para escrita
 			blockAddr = createInodeBlock(iNodeAtual);
 			if (blockAddr == -1) return -1;
 			sectorToWrite = blockToSector(blockAddr, sectorNoBloco);
@@ -511,7 +504,7 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 		unsigned char infoToWrite[DISK_SECTORDATASIZE];
 		diskReadSector(currentDisk, sectorToWrite, infoToWrite);
 
-		while (offsetNoSetor < DISK_SECTORDATASIZE && bytesEscritos < nbytes) {
+		while (offsetNoSetor < DISK_SECTORDATASIZE && bytesEscritos < nbytes) { //escrita
 			infoToWrite[offsetNoSetor] = buf[bytesEscritos];
 			offsetNoSetor++;
 			bytesEscritos++;
@@ -519,7 +512,6 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 		}
 
 		diskWriteSector(currentDisk, sectorToWrite, infoToWrite);
-		allocateBlocksInBitmap(bitmapCache, blockAddr, blockAddr);
 	}
 
 	// Salva o Inode atualizado no disco (metadados como tamanho e blocos novos)
@@ -535,17 +527,12 @@ int myFSClose (int fd) {
 		return -1;
 	}
 	
-	printf("filesOpened: %d", filesOpened);
+
 	if (tabelaAbertos[fd-1].emUso == 1){
 		tabelaAbertos[fd-1].inode = NULL;
 		tabelaAbertos[fd-1].posicaoCursor = 0;
 		tabelaAbertos[fd-1].emUso = 0;
-		
 		filesOpened--;
-		for (int m = 0; m < MAX_FDS; m++) {
-				printf("Entrada %d: Uso=%d, Inode=%p, Cursor=%d \n", m+1, tabelaAbertos[m].emUso, tabelaAbertos[m].inode, tabelaAbertos[m].posicaoCursor);
-		}
-		printf("filesOpened: %d", filesOpened);
 		return 0;
 	}
 
