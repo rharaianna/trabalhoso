@@ -432,7 +432,61 @@ int myFSOpen (Disk *d, const char *path) {
 //do próximo byte apos o ultimo lido. Retorna o numero de bytes
 //efetivamente lidos em caso de sucesso ou -1, caso contrario.
 int myFSRead (int fd, char *buf, unsigned int nbytes) {
-	return -1;
+	if (filesOpened <= 0 || fd < 1 || fd > MAX_FDS) return -1;
+
+	// esse fd aqui nao entendi pq tem lugar q ele ta valendo 1 (no open) e outro fd-1 (no close) e no write ta fd direto 
+	DescritorArquivo *arquivo = &tabelaAbertos[fd-1];
+	
+	if (arquivo->emUso == 0) return -1;
+	Inode *inode = arquivo->inode;
+
+	//limites do arquivo
+    unsigned int fileSize = inodeGetFileSize(inode);
+    unsigned int currentPos = arquivo->posicaoCursor;
+
+	//Se o cursor já está no final ou dps, retorna 0
+	if (currentPos >= fileSize) {
+        return 0;
+    }
+
+	//calcula quantos bytes podemos ler
+    unsigned int bytesRemainingInFile = fileSize - currentPos;
+	unsigned int bytesToRead = bytesRemainingInFile;
+
+	if (nbytes < bytesRemainingInFile) {
+		bytesToRead = nbytes;
+	}
+
+	unsigned int bytesRead = 0;
+
+	while (bytesRead < bytesToRead){
+		int logicalBlock = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
+		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
+		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
+
+		unsigned int blockAddr = inodeGetBlockAddr(inode, logicalBlock);
+
+		//não tem bloco alocado nessa posição, retorna erro
+		if (blockAddr == 0) {
+			return -1;
+		}
+
+		int sectorToRead = blockToSector(blockAddr, sectorNoBloco);
+		unsigned char infoToRead[DISK_SECTORDATASIZE];
+
+		diskReadSector(currentDisk, sectorToRead, infoToRead);
+
+		//le do disco para o buffer
+		while (offsetNoSetor < DISK_SECTORDATASIZE && bytesRead < bytesToRead) {
+			buf[bytesRead] = infoToRead[offsetNoSetor];
+			offsetNoSetor++;
+			bytesRead++;
+			arquivo->posicaoCursor++;
+		}
+	}
+
+	return bytesRead;
 }
 
 char* intParaBinario(int n) {
@@ -464,8 +518,9 @@ char* intParaBinario(int n) {
 
 //Funcao que acha um bloco livre, cria o bloco no inode e retorna o endereco desse bloco
 //Retorna -1 se falso
-int createInodeBlock(Inode* inode){
-	for (int i = 1; i < bitmapSizeInBytes; i++)
+int createInodeBlock(Inode* inode)
+{
+	for (int i = 0; i < bitmapSizeInBytes; i++)
 	{
 		for (int j = 0; j < 8; j++)
 		{
