@@ -60,7 +60,8 @@ typedef struct {
 
 typedef struct { 
 	Inode *inode;
-	unsigned int posicaoCursor;
+	unsigned int posicaoCursorLeitura;
+	unsigned int posicaoCursorEscrita;
 	unsigned int emUso;
 } DescritorArquivo;
 
@@ -357,7 +358,8 @@ int myFSOpen (Disk *d, const char *path) {
 			for (int j=1; j <= MAX_FDS; j++){
 				if (tabelaAbertos[j-1].emUso == 0){
 					tabelaAbertos[j-1].inode = arquivoInode;
-					tabelaAbertos[j-1].posicaoCursor = 0;
+					tabelaAbertos[j-1].posicaoCursorLeitura = 0;
+					tabelaAbertos[j-1].posicaoCursorEscrita = 0;
 					tabelaAbertos[j-1].emUso = 1;
 
 					filesOpened++;
@@ -412,7 +414,8 @@ int myFSOpen (Disk *d, const char *path) {
 	for (int k=1; k <= MAX_FDS; k++){
 		if (tabelaAbertos[k-1].emUso == 0){
 			tabelaAbertos[k-1].inode = novoInode;
-			tabelaAbertos[k-1].posicaoCursor = 0;
+			tabelaAbertos[k-1].posicaoCursorLeitura = 0;
+			tabelaAbertos[k-1].posicaoCursorEscrita = 0;
 			tabelaAbertos[k-1].emUso = 1;
 			filesOpened++;
 			free(rootInode);
@@ -434,7 +437,6 @@ int myFSOpen (Disk *d, const char *path) {
 int myFSRead (int fd, char *buf, unsigned int nbytes) {
 	if (filesOpened <= 0 || fd < 1 || fd > MAX_FDS) return -1;
 
-	// esse fd aqui nao entendi pq tem lugar q ele ta valendo 1 (no open) e outro fd-1 (no close) e no write ta fd direto 
 	DescritorArquivo *arquivo = &tabelaAbertos[fd-1];
 	
 	if (arquivo->emUso == 0) return -1;
@@ -442,7 +444,7 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 
 	//limites do arquivo
     unsigned int fileSize = inodeGetFileSize(inode);
-    unsigned int currentPos = arquivo->posicaoCursor;
+    unsigned int currentPos = arquivo->posicaoCursorLeitura;
 
 	//Se o cursor já está no final ou dps, retorna 0
 	if (currentPos >= fileSize) {
@@ -458,12 +460,13 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 	}
 
 	unsigned int bytesRead = 0;
-
-	while (bytesRead < bytesToRead){
-		int logicalBlock = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
-		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
+	int logicalBlock = 0;
+	int finalLogicalBlock = inodeGetFileSize(inode) / (DISK_SECTORDATASIZE * sectorsPerBlock);
+	while (bytesRead < bytesToRead || logicalBlock < finalLogicalBlock){
+		int offsetNoBloco = currentPos % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
 		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
 		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
+
 
 		unsigned int blockAddr = inodeGetBlockAddr(inode, logicalBlock);
 
@@ -482,8 +485,10 @@ int myFSRead (int fd, char *buf, unsigned int nbytes) {
 			buf[bytesRead] = infoToRead[offsetNoSetor];
 			offsetNoSetor++;
 			bytesRead++;
-			arquivo->posicaoCursor++;
+			arquivo->posicaoCursorLeitura++;
 		}
+		if (currentPos/(DISK_SECTORDATASIZE * sectorsPerBlock)==0)
+			logicalBlock++;
 	}
 
 	return bytesRead;
@@ -546,15 +551,14 @@ int createInodeBlock(Inode* inode)
 //proximo byte apos o ultimo escrito. Retorna o numero de bytes
 //efetivamente escritos em caso de sucesso ou -1, caso contrario
 int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
-	if (fd < 0 || fd >= MAX_FDS || tabelaAbertos[fd].emUso == 0) return -1;
-
-	DescritorArquivo* arquivo = &tabelaAbertos[fd];
+	if (filesOpened<=0 || fd < 1 || fd > MAX_FDS || tabelaAbertos[fd-1].emUso == 0) return -1;
+	DescritorArquivo* arquivo = &tabelaAbertos[fd-1];
 	Inode* iNodeAtual = arquivo->inode;
 	int bytesEscritos = 0;
 
 	while (bytesEscritos < nbytes) {
-		int logicalBlock = arquivo->posicaoCursor / (DISK_SECTORDATASIZE * sectorsPerBlock);
-		int offsetNoBloco = arquivo->posicaoCursor % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
+		int logicalBlock = arquivo->posicaoCursorEscrita / (DISK_SECTORDATASIZE * sectorsPerBlock);
+		int offsetNoBloco = arquivo->posicaoCursorEscrita % (DISK_SECTORDATASIZE * sectorsPerBlock); //calculo de offsets para escrita certa em cada passo
 		int sectorNoBloco = offsetNoBloco / DISK_SECTORDATASIZE;
 		int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
 
@@ -578,13 +582,16 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 			infoToWrite[offsetNoSetor] = buf[bytesEscritos];
 			offsetNoSetor++;
 			bytesEscritos++;
-			arquivo->posicaoCursor++;;
+			arquivo->posicaoCursorEscrita++;;
 		}
 
 		diskWriteSector(currentDisk, sectorToWrite, infoToWrite);
 	}
 
 	// Salva o Inode atualizado no disco (metadados como tamanho e blocos novos)
+	inodeSetFileSize(iNodeAtual,inodeGetFileSize(iNodeAtual)+bytesEscritos);
+	inodeSetFileType(iNodeAtual,1);
+	inodeSave(iNodeAtual);
 	return bytesEscritos;
 }
 
@@ -599,7 +606,8 @@ int myFSClose (int fd) {
 
 	if (tabelaAbertos[fd-1].emUso == 1){
 		tabelaAbertos[fd-1].inode = NULL;
-		tabelaAbertos[fd-1].posicaoCursor = 0;
+		tabelaAbertos[fd-1].posicaoCursorLeitura = 0;
+		tabelaAbertos[fd-1].posicaoCursorEscrita = 0;
 		tabelaAbertos[fd-1].emUso = 0;
 		filesOpened--;
 		return 0;
