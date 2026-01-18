@@ -65,6 +65,7 @@ typedef struct {
 } DescritorArquivo;
 
 DescritorArquivo tabelaAbertos[MAX_FDS] = {0}; //guarda as informações do arquivo enquanto ele estiver aberto
+RootEntry*entradaRaiz;
 
 //...
 
@@ -152,12 +153,15 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 		unsigned int bitsPerSector = DISK_SECTORDATASIZE * 8;
 		unsigned int totalBytesNeeded = (numBlocks + 7) / 8;
 		bitmapTableSectors = (totalBytesNeeded + DISK_SECTORDATASIZE - 1)/ DISK_SECTORDATASIZE;
-		bitmapSizeInBytes = bitmapTableSectors * DISK_SECTORDATASIZE;
+		if(bitmapTableSectors > 1) {
+			printf("Quantidade de cilindros muito alta ou blocos muito pequenos.\n");
+			return -1;
+		}
+		bitmapTableSectors = 1;
+		bitmapSizeInBytes = DISK_SECTORDATASIZE;
 		
 
 
-		
-		
 		// Aqui começa dvdd
 		unsigned char emptySectors[DISK_SECTORDATASIZE] = {0};
 		diskWriteSector(d, 0, emptySectors); // zera o primeiro setor
@@ -187,7 +191,7 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 	// INICIALIZAÇÃO DO BITMAP
 
 		bitmapStart = 1;
-		inodeStart = bitmapStart + bitmapTableSectors;
+		inodeStart = 2;
 		dataStart = inodeStart + inodeTableSectors;
 
 		unsigned int totalBlocksToReserve = (dataStart + sectorsPerBlock - 1) / sectorsPerBlock;
@@ -222,7 +226,6 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
 
 	Inode* root = inodeCreate(1,d);
 	if (root) {
-        inodeSave(root);
         free(root);
     }
 
@@ -230,7 +233,6 @@ int myFSFormat (Disk *d, unsigned int blockSize) {
     for (unsigned int i = 2; i <= numInodes; i++) {
         Inode* temp = inodeCreate(i, d);
         if (temp) {
-            inodeSave(temp); // Grava o ID correto e a estrutura zerada no disco
             free(temp);// Se não der free, o malloc vai estourar a memória
         }
     }
@@ -320,7 +322,7 @@ int myFSOpen (Disk *d, const char *path) {
 	if (filesOpened >= MAX_FDS) return -1;
 
 	// Carrega arquivos a partir do rootInode
-	Inode* rootInode = inodeLoad(1, d);
+	Inode* rootInode = (Inode*)rootInodeCache;
 	unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
 
 	unsigned int blockRoot = inodeGetBlockAddr(rootInode, 0);
@@ -332,7 +334,7 @@ int myFSOpen (Disk *d, const char *path) {
 		return -1;
 	}
 
-	RootEntry*entradaRaiz = (RootEntry*) cacheSetor;
+	entradaRaiz = (RootEntry*) cacheSetor;
 	int qtdEntradas = DISK_SECTORDATASIZE / sizeof(RootEntry);
 
 	// Procura o arquivo pelo nome
@@ -342,12 +344,14 @@ int myFSOpen (Disk *d, const char *path) {
 		nomeTemp[FILE_NAME_MAX_LENGTH] = '\0';
 
 		if (strcmp(nomeTemp, path+1) == 0){ 
-			int numInodeEncontrado;
-			// Usando a estrutura para acessar o campo inode
-			numInodeEncontrado = entradaRaiz[i].inode;
 
-			// Carregando pra memoria
+			// carrega o Inode do arquivo
+			int numInodeEncontrado = entradaRaiz[i].inode;
 			Inode* arquivoInode = inodeLoad(numInodeEncontrado, d);
+			if (arquivoInode == NULL) {
+				free(rootInode);
+				return -1; // Erro ao carregar o Inode
+			}
 			
 			// Registrando na tabela de de arquivos abertos
 			for (int j=1; j <= MAX_FDS; j++){
@@ -388,8 +392,14 @@ int myFSOpen (Disk *d, const char *path) {
 		free(rootInode);
 		return -1; // Erro na criação do Inode
 	}
-	inodeSave(novoInode);
 	
+	inodeSetGroupOwner(novoInode, 42);
+	inodeSetOwner(novoInode, 42);
+	inodeSetPermission(novoInode, 644);
+	inodeSetFileType(novoInode, 1);
+	inodeSetRefCount(novoInode, inodeGetRefCount(novoInode) + 1);
+	inodeSetFileSize(novoInode, 0);
+
 	// Atualiza o Diretório Raiz
 	entradaRaiz[vagaNoDiretorio].inode = inodeNumber;
 	strncpy(entradaRaiz[vagaNoDiretorio].name, path+1, FILE_NAME_MAX_LENGTH);
@@ -454,8 +464,7 @@ char* intParaBinario(int n) {
 
 //Funcao que acha um bloco livre, cria o bloco no inode e retorna o endereco desse bloco
 //Retorna -1 se falso
-int createInodeBlock(Inode* inode)
-{
+int createInodeBlock(Inode* inode){
 	for (int i = 1; i < bitmapSizeInBytes; i++)
 	{
 		for (int j = 0; j < 8; j++)
@@ -521,7 +530,6 @@ int myFSWrite (int fd, const char *buf, unsigned int nbytes) {
 	}
 
 	// Salva o Inode atualizado no disco (metadados como tamanho e blocos novos)
-	inodeSave(iNodeAtual);
 	return bytesEscritos;
 }
 
