@@ -47,7 +47,7 @@ unsigned int inodeTableSectors;  // tamanho da tabela de inodes
 
 unsigned int dataStart = -1;          // setor inicial dos dados
 unsigned char *bitmapCache = NULL;
-unsigned char *rootInodeCache = NULL;
+unsigned char *rootInodeCache = NULL;  // cache do inode raiz
 unsigned char *superblockCache = NULL;
 int filesOpened = -1; // -1 indica sistema nao montado
 
@@ -272,8 +272,8 @@ int myFSxMount (Disk *d, int x) {
 					break;
 				case 2:
 					//verificar se existe indoe raiz aqui
-					rootInodeCache = (unsigned char *) malloc(16);
-					memcpy(rootInodeCache, information_sector, 16);
+					rootInodeCache = (unsigned char *) malloc(64);
+					memcpy(rootInodeCache, information_sector, 64);
 					break;
 				default:
 					break;
@@ -287,16 +287,22 @@ int myFSxMount (Disk *d, int x) {
 	if (x==0) {
 		diskWriteSector(d, 0, superblockCache);
 		free(superblockCache);
-		for (int i=bitmapStart; i < (bitmapTableSectors); i++) {
+
+		//grava o bitmap de volta no disco
+		for (int i=0; i < bitmapTableSectors; i++) {
 			unsigned char setorBitmap[DISK_SECTORDATASIZE] = {0};
-			memcpy(setorBitmap, &bitmapCache[(i - bitmapStart) * DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
-			diskWriteSector(d, i, setorBitmap);
+			memcpy(setorBitmap, &bitmapCache[i*DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
+			diskWriteSector(d, i + bitmapStart, setorBitmap);
 		}
-		for (int i=inodeStart; i < (inodeTableSectors); i++) {
-			unsigned char setorInode[DISK_SECTORDATASIZE] = {0};
-			memcpy(setorInode, &rootInodeCache[(i - inodeStart) * DISK_SECTORDATASIZE], DISK_SECTORDATASIZE);
-			diskWriteSector(d, i, setorInode);
-		}
+		free(bitmapCache);
+
+		//grava o inode raiz de volta no disco
+		unsigned char setorInode[DISK_SECTORDATASIZE] = {0};
+		diskReadSector(d, inodeStart, setorInode);
+		memcpy(setorInode, &rootInodeCache, 64);
+		diskWriteSector(d, inodeStart, setorInode);
+		free(rootInodeCache);
+
 		filesOpened=-1;
 		currentDisk=NULL;
 		fsMounted=0;
