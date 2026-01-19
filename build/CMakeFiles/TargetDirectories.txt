@@ -1,3 +1,0 @@
-/home/caua/Code/trabalhoso/build/CMakeFiles/trabalhoso.dir
-/home/caua/Code/trabalhoso/build/CMakeFiles/edit_cache.dir
-/home/caua/Code/trabalhoso/build/CMakeFiles/rebuild_cache.dir
