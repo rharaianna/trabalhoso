@@ -288,7 +288,6 @@ int myFSxMount(Disk *d, int x) {
       free(superblockCache);
       return 0;
     }  
-    printf("Superbloco lido \n");
     
     // verificacao do número mágico
     unsigned char numMagico[4] = MYFS_MAGIC_NUMBER;
@@ -297,18 +296,15 @@ int myFSxMount(Disk *d, int x) {
         return 0;
       }
     }
-    printf("Numero magico verificado \n");
 
     unsigned int blockSize;
     char2ul(&superblockCache[4], &blockSize);
     char2ul(&superblockCache[8], &diskSizeInSectors);
 
-    printf("blocksize: %d \n", blockSize);
     
     if (diskSizeInSectors != diskGetNumSectors(d)) {
       return 0;
     }
-    printf("DiskSize correto \n");
 
     sectorsPerBlock = blockSize;
 
@@ -316,8 +312,6 @@ int myFSxMount(Disk *d, int x) {
     // pq nn, alguem falou q era o certo)
     numInodes = (diskSizeInSectors * DISK_SECTORDATASIZE) / (16 * 1024);
     inodeTableSectors = (numInodes * inodeSize + DISK_SECTORDATASIZE - 1) / DISK_SECTORDATASIZE;
-    printf("1 \n");
-
 
     // Bitmap: 1 bit por bloco
     diskSizeInBlocks = diskSizeInSectors / blockSize;
@@ -378,8 +372,6 @@ int myFSOpen(Disk *d, const char *path) {
   if (filesOpened >= MAX_FDS)
     return -1;
 
-  printf("Abrindo arquivo: %s\n", path);
-
   // Carrega arquivos a partir do rootInode
   Inode *rootInode = (Inode *)rootInodeCache;
   unsigned char cacheSetor[DISK_SECTORDATASIZE] = {0};
@@ -393,53 +385,32 @@ int myFSOpen(Disk *d, const char *path) {
   }
   entradaRaiz = (RootEntry *)cacheSetor;
   int qtdEntradas = DISK_SECTORDATASIZE / sizeof(RootEntry);
-  
-  for(int i = 0; i < qtdEntradas; i++) {
-    printf("Entrada %d: %s, inode: %p \n", i, entradaRaiz[i].name, entradaRaiz[i].inode);
-  }
 
   // Procura o arquivo pelo nome
   for (int i = 0; i < qtdEntradas; i++) {
-    printf("%d", i);
     char nomeTemp[FILE_NAME_MAX_LENGTH + 1]; // FILE_NAME_MAX_LENGTH chars + '\0'
     strncpy(nomeTemp, entradaRaiz[i].name, FILE_NAME_MAX_LENGTH);
     nomeTemp[FILE_NAME_MAX_LENGTH] = ' ';
-
-    for(int j = 0; j < FILE_NAME_MAX_LENGTH; j++) {
-      printf("%c", nomeTemp[j]);
-    }
-    printf("\n");
-    for(int j = 0; j < FILE_NAME_MAX_LENGTH; j++) {
-      printf("%c", path[j]);
-    }
-    printf("\n");
-
 
     if (strcmp(nomeTemp, path+1) == 0) {
 
       // carrega o Inode do arquivo
       int numInodeEncontrado = entradaRaiz[i].inode;
       Inode *arquivoInode = inodeLoad(numInodeEncontrado, d);
-      printf("2 \n");
 
       if (arquivoInode == NULL) {
-
         return -1; // Erro ao carregar o Inode
       }
-      printf("3 \n");
 
       // Registrando na tabela de de arquivos abertos
       for (int j = 1; j <= MAX_FDS; j++) {
         if (tabelaAbertos[j - 1].emUso == 0) {
-          printf("4 \n");
           tabelaAbertos[j - 1].inode = arquivoInode;
           tabelaAbertos[j - 1].posicaoCursorLeitura = 0;
           tabelaAbertos[j - 1].posicaoCursorEscrita = 0;
           tabelaAbertos[j - 1].emUso = 1;
 
           filesOpened++;
-          printf("5 \n");
-
           return j;
         }
       }
@@ -480,7 +451,6 @@ int myFSOpen(Disk *d, const char *path) {
   entradaRaiz[vagaNoDiretorio].inode = inodeNumber;
   strncpy(entradaRaiz[vagaNoDiretorio].name, path + 1, FILE_NAME_MAX_LENGTH);
   for(int i = 0; i < qtdEntradas; i++) {
-    printf("Entrada %d: %s, inode: %p \n", i, entradaRaiz[i].name, entradaRaiz[i].inode);
   }
   entradaRaiz[vagaNoDiretorio].name[FILE_NAME_MAX_LENGTH - 1] = '\0';
 
@@ -610,30 +580,18 @@ char *intParaBinario(int n) {
 // proximo byte apos o ultimo escrito. Retorna o numero de bytes
 // efetivamente escritos em caso de sucesso ou -1, caso contrario
 int myFSWrite(int fd, const char *buf, unsigned int nbytes) {
-  printf("a1 \n");
   if (filesOpened <= 0 || fd < 1 || fd > MAX_FDS ||
       tabelaAbertos[fd - 1].emUso == 0)
     return -1;
-    
-  printf("a2 \n");
-  printf("%d AAAAAAAA", tabelaAbertos[1].posicaoCursorEscrita);
-  printf("aaaaaaaaaaaaaaaaaaaaaaaaaa \n");
-  DescritorArquivo *arquivo = &tabelaAbertos[fd - 1];
+      DescritorArquivo *arquivo = &tabelaAbertos[fd - 1];
 
   Inode *iNodeAtual = arquivo->inode;
-  printf("aqui2");
-
   int bytesEscritos = 0;
-  printf("aqui3");
 
 
   while (bytesEscritos < nbytes) {
-    printf("%d sectorsPerBlock", sectorsPerBlock);
-    printf("%d posicaoCursorEscrita", arquivo->posicaoCursorEscrita);
-
     int logicalBlock =
         arquivo->posicaoCursorEscrita / (DISK_SECTORDATASIZE * sectorsPerBlock);
-      printf("a3 \n");
     int offsetNoBloco =
         arquivo->posicaoCursorEscrita %
         (DISK_SECTORDATASIZE * sectorsPerBlock); // calculo de offsets para
@@ -642,7 +600,6 @@ int myFSWrite(int fd, const char *buf, unsigned int nbytes) {
     int offsetNoSetor = offsetNoBloco % DISK_SECTORDATASIZE;
 
     int blockAddr = inodeGetBlockAddr(iNodeAtual, logicalBlock);
-    printf("a4 \n");
     int sectorToWrite;
     if (blockAddr ==
         0) { // se nao encontrar o bloco logico como valido no inode, cria um
@@ -654,8 +611,6 @@ int myFSWrite(int fd, const char *buf, unsigned int nbytes) {
     } else {
       sectorToWrite = blockToSector(blockAddr, sectorNoBloco);
     }
-    printf("a5 \n");
-
     unsigned char infoToWrite[DISK_SECTORDATASIZE];
     diskReadSector(currentDisk, sectorToWrite, infoToWrite);
 
