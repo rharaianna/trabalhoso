@@ -511,7 +511,7 @@ int myFSRead(int fd, char *buf, unsigned int nbytes) {
   int logicalBlock = 0;
   int finalLogicalBlock =
       inodeGetFileSize(inode) / (DISK_SECTORDATASIZE * sectorsPerBlock);
-  while (bytesRead < bytesToRead || logicalBlock < finalLogicalBlock) {
+  while (bytesRead < bytesToRead && logicalBlock <= finalLogicalBlock) {
     int offsetNoBloco =
         currentPos %
         (DISK_SECTORDATASIZE * sectorsPerBlock); // calculo de offsets para
@@ -524,6 +524,7 @@ int myFSRead(int fd, char *buf, unsigned int nbytes) {
     // não tem bloco alocado nessa posição, retorna erro
     if (blockAddr == 0) {
       return -1;
+
     }
 
     int sectorToRead = blockToSector(blockAddr, sectorNoBloco);
@@ -538,7 +539,7 @@ int myFSRead(int fd, char *buf, unsigned int nbytes) {
       bytesRead++;
       arquivo->posicaoCursorLeitura++;
     }
-    if (currentPos / (DISK_SECTORDATASIZE * sectorsPerBlock) == 0)
+    if ((currentPos % (DISK_SECTORDATASIZE * sectorsPerBlock)) == 0)
       logicalBlock++;
   }
 
